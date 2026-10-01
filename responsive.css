@@ -1,0 +1,1540 @@
+/*
+ * Solids ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â responsive layer.
+ * Makes the storefront and the admin workspace behave on phones, tablets
+ * and narrow desktop windows. Loaded last so it wins on specificity ties.
+ */
+
+/* ==================================================================
+   1. Full-page product editor (replaces the cramped popup)
+
+   admin.css ships `.admin-modal form { width: min(480px,100%) }` and
+   premium.css ships `.admin-modal form { max-height:92vh; overflow:auto }`.
+   Both out-specify a bare `.product-editor-form`, which is why the editor
+   used to open as a cramped 480px centred box. These selectors include the
+   `.admin-modal` ancestor so they win without resorting to !important.
+   ================================================================== */
+
+.admin-modal.product-editor {
+  position: fixed;
+  inset: 0;
+  background: var(--paper);
+  overflow: auto;
+  padding: 0;
+  z-index: 80;
+  display: none;
+  place-items: stretch;
+  align-items: stretch
+}
+
+.admin-modal.product-editor.show {
+  display: block
+}
+
+.admin-modal.product-editor>.product-editor-form,
+.admin-modal.product-editor form.product-editor-form {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 1400px;
+  max-height: none;
+  height: auto;
+  margin: 0 auto;
+  padding: 0 40px 90px;
+  background: var(--paper);
+  overflow: visible;
+  box-shadow: none;
+  border: 0;
+  border-radius: 0
+}
+
+/* sticky editor header so Save / Cancel are always reachable */
+.admin-modal.product-editor>.product-editor-form>.editor-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  padding: 20px 0 18px;
+  margin-bottom: 26px
+}
+
+.admin-modal.product-editor>.product-editor-form>.editor-bar .modal-close {
+  position: static;
+  order: 3;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center
+}
+
+.admin-modal.product-editor>.product-editor-form>.editor-bar .modal-close:hover {
+  background: var(--ink);
+  color: #fff
+}
+
+.editor-bar-titles {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0
+}
+
+.editor-bar-titles h3 {
+  margin: 0;
+  font: 26px 'Libre Baskerville', serif
+}
+
+.editor-bar-titles .eyebrow {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--muted)
+}
+
+.editor-bar-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto
+}
+
+.editor-bar-actions .button {
+  min-width: 120px;
+  border: 0
+}
+
+.editor-bar-actions .button:not(.button-dark) {
+  border: 1px solid var(--line);
+  background: #fff
+}
+
+/* two comfortable columns; falls back to one automatically */
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1.15fr);
+  gap: 44px;
+  align-items: start
+}
+
+.editor-main,
+.editor-side {
+  min-width: 0
+}
+
+.editor-side {
+  position: sticky;
+  top: 104px;
+  display: grid;
+  gap: 4px
+}
+
+.editor-side .picker,
+.editor-side .gallery-editor {
+  margin: 12px 0 0
+}
+
+/* picker: preview + text sit side by side, buttons never clip */
+.picker {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  border: 1px dashed var(--line);
+  background: #fff;
+  padding: 14px;
+  margin: 14px 0;
+  transition: border-color .2s, background .2s
+}
+
+.picker-preview {
+  width: 84px;
+  height: 104px;
+  background: var(--cream);
+  display: grid;
+  place-items: center;
+  overflow: hidden
+}
+
+.picker-actions {
+  min-width: 0
+}
+
+.picker-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 3px
+}
+
+.picker .file-help {
+  font-size: 10px;
+  line-height: 1.6
+}
+
+.picker-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px
+}
+
+.picker-buttons .button {
+  min-width: 0;
+  white-space: nowrap;
+  flex: 0 1 auto
+}
+
+/* native file inputs stay in the DOM but never render */
+.picker input[type=file] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none
+}
+
+/* ==============================================================
+   2. Size table ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â always fully readable
+   ============================================================== */
+
+.size-table {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 16px;
+  overflow-x: auto
+}
+
+.size-table-head,
+.size-row {
+  display: grid;
+  grid-template-columns:
+    minmax(96px, .8fr) minmax(104px, .85fr) minmax(124px, 1.1fr) minmax(124px, 1.1fr) minmax(80px, .6fr) 34px;
+  gap: 12px;
+  align-items: end;
+  min-width: 640px
+}
+
+.size-table-head {
+  font-size: 9px;
+  letter-spacing: .6px;
+  color: var(--muted);
+  padding-bottom: 12px
+}
+
+.size-table-head span {
+  line-height: 1.4
+}
+
+.size-row {
+  padding: 9px 0;
+  border-top: 1px solid var(--line)
+}
+
+.size-row input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 12px 10px;
+  font-size: 13px;
+  margin: 0;
+  outline: 0;
+  text-align: center;
+  -moz-appearance: textfield
+}
+
+.size-row input::-webkit-outer-spin-button,
+.size-row input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0
+}
+
+.size-row input:focus {
+  border-color: var(--ink)
+}
+
+.size-field {
+  display: block;
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted)
+}
+
+.size-field>span {
+  display: none
+}
+
+.product-editor-form label.size-field {
+  margin: 0
+}
+
+.size-row .row-danger {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer
+}
+
+.size-row .row-danger:hover {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink)
+}
+
+.size-table-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 16px
+}
+
+.size-totals {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+  text-align: right;
+  line-height: 1.6
+}
+
+.size-totals b {
+  color: var(--ink)
+}
+
+.danger-text {
+  color: var(--accent)
+}
+
+.good-text {
+  color: var(--green)
+}
+
+/* ==================================================================
+   3. Admin shell ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â responsive sidebar + grids
+   ================================================================== */
+
+.admin-sidebar-toggle {
+  position: fixed;
+  left: 14px;
+  top: 14px;
+  z-index: 55;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 17px;
+  cursor: pointer;
+  display: none;
+  place-items: center;
+  border-radius: 2px
+}
+
+.admin-sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(33, 30, 27, .45);
+  z-index: 48;
+  opacity: 0;
+  visibility: hidden;
+  transition: .25s
+}
+
+.admin-sidebar-scrim.show {
+  opacity: 1;
+  visibility: visible
+}
+
+/* .stat-grid holds the four KPI cards. (Not .admin-page ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â that class sits on
+   <body>, and turning the body into a grid breaks the sidebar layout.) */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px
+}
+
+.admin-manage-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px
+}
+
+.admin-section {
+  min-width: 0
+}
+
+.admin-content {
+  min-width: 0
+}
+
+.admin-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap
+}
+
+.admin-topbar h1 {
+  font-size: 24px
+}
+
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap
+}
+
+.page-heading h2 {
+  font-size: 25px
+}
+
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap
+}
+
+/* wide data tables become horizontally scrollable, never squashed */
+.page-table-head,
+.page-order-row,
+.page-customer-row,
+.customer-page-head {
+  min-width: 0
+}
+
+#products-page-list,
+#orders-page-list,
+#customers-page-list {
+  min-width: 0
+}
+
+.page-order-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 16px;
+  align-items: center
+}
+
+.page-order-main {
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit
+}
+
+.page-order-main strong,
+.page-order-main span,
+.page-order-main small {
+  display: block
+}
+
+.page-order-main span,
+.page-order-main small {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 3px
+}
+
+.page-order-row select {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 8px;
+  font-size: 10px
+}
+
+.page-customer-row,
+.customer-page-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) .5fr .8fr .7fr auto;
+  gap: 16px;
+  align-items: center
+}
+
+.page-customer-row small {
+  color: var(--muted);
+  font-size: 10px;
+  display: block;
+  margin-top: 3px
+}
+
+.page-customer-row button,
+.page-order-row button {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 10px;
+  white-space: nowrap
+}
+
+.page-customer-row button:hover,
+.page-order-row button:hover {
+  text-decoration: underline
+}
+
+.page-order-row .danger,
+.product-row button.danger {
+  color: var(--accent)
+}
+
+/* product rows */
+.product-row-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+  align-items: center
+}
+
+.product-row-head .product-info {
+  min-width: 0
+}
+
+.product-row-head .product-info span {
+  min-width: 0
+}
+
+.product-row-head .product-info strong,
+.product-row-head .product-info small {
+  display: block
+}
+
+.product-row-head .product-info small {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 4px
+}
+
+.size-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 16px 0 14px
+}
+
+.size-chip {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  transition: border-color .2s, background .2s
+}
+
+.size-chip:hover {
+  border-color: var(--ink)
+}
+
+.size-chip b {
+  font-size: 13px
+}
+
+.size-chip span,
+.size-chip em,
+.size-chip small {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: normal
+}
+
+.size-chip em {
+  color: var(--ink)
+}
+
+.size-chip.is-out {
+  background: #fdf6f3;
+  border-color: #e6cfc7
+}
+
+.size-chip.is-out b {
+  color: var(--accent);
+  text-decoration: line-through
+}
+
+.product-row-foot {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--muted);
+  border-top: 1px dashed var(--line);
+  padding-top: 12px
+}
+
+.inventory-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line)
+}
+
+.inventory-toolbar input[type=search] {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 11px 13px;
+  font-size: 12px;
+  min-width: 240px;
+  flex: 1 1 220px;
+  outline: 0
+}
+
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap
+}
+
+.filter-chips .filter {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 9px 14px;
+  font-size: 10px;
+  cursor: pointer
+}
+
+.filter-chips .filter.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink)
+}
+
+/* content editor */
+.content-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 34px;
+  margin-top: 22px;
+  align-items: start
+}
+
+.content-fields label {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin: 0 0 13px
+}
+
+.content-fields input,
+.content-fields textarea {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 11px;
+  margin-top: 6px;
+  font-size: 12px;
+  outline: 0
+}
+
+.content-editor .modal-actions {
+  grid-column: 1/-1;
+  display: flex;
+  justify-content: flex-end
+}
+
+/* order detail sheet stays a centred dialog, not a full page */
+.admin-modal.order-sheet {
+  display: none;
+  place-items: center;
+  background: rgba(33, 30, 27, .46);
+  padding: 20px;
+  z-index: 80
+}
+
+.admin-modal.order-sheet.show {
+  display: grid
+}
+
+.admin-modal.order-sheet>.product-editor-form,
+.admin-modal.order-sheet form.product-editor-form {
+  width: min(760px, 100%);
+  max-width: 760px;
+  max-height: 92vh;
+  height: auto;
+  overflow: auto;
+  padding: 36px;
+  background: var(--paper);
+  border: 0;
+  border-radius: 0
+}
+
+.order-sheet-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) .7fr .9fr auto;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+  font-size: 11px
+}
+
+/* ==================================================================
+   4. Storefront
+   ================================================================== */
+
+.announcement {
+  text-align: center;
+  padding: 12px 20px;
+  font-size: 10px;
+  line-height: 1.6
+}
+
+/* ------------------------------------------------------------------ *
+ * Storefront header
+ * styles.css hides .desktop-nav and .header-link below 850px and expects
+ * a hamburger that never existed. Re-enable the real nav here and rebuild
+ * the header so Home / Shop / Brand story / Search / Bag always show.
+ * ------------------------------------------------------------------ */
+
+.site-header,
+.catalog-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 0 4.5vw;
+  height: 84px;
+  min-height: 84px
+}
+
+.home-body .site-header {
+  height: 100px;
+  min-height: 100px
+}
+
+.site-header .desktop-nav,
+.site-header .catalog-header .desktop-nav {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  font-size: 12px;
+  min-width: 0;
+  justify-self: start
+}
+
+.site-header .desktop-nav a {
+  white-space: nowrap
+}
+
+.site-header .wordmark {
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center
+}
+
+/* premium.css pins the logo to 190x66 which renders tiny on narrow screens ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
+   drive it from the available height instead. */
+.site-header .brand-logo,
+.home-body .brand-logo,
+.catalog-header .brand-logo {
+  display: block;
+  width: auto;
+  height: clamp(38px, 5.2vw, 52px);
+  max-width: 100%;
+  object-fit: contain;
+  background: transparent
+}
+
+.site-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  justify-self: end;
+  min-width: 0;
+  font-size: 12px
+}
+
+.site-header .header-link {
+  display: inline-block !important;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap
+}
+
+.site-header .cart-trigger {
+  border: 0;
+  padding: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  background: none;
+  cursor: pointer
+}
+
+.site-header .cart-trigger::before {
+  content: none !important
+}
+
+.site-header .cart-trigger span {
+  color: var(--accent);
+  padding-left: 5px;
+  font-size: 11px
+}
+
+/* filter chips scroll sideways instead of stretching the page */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0
+}
+
+.filter-row .filter {
+  white-space: nowrap;
+  flex: 0 0 auto
+}
+
+.catalog-sidebar {
+  min-width: 0
+}
+
+.hero-copy {
+  left: 6vw;
+  right: 6vw;
+  max-width: 560px
+}
+
+.hero-copy h1 {
+  font-size: clamp(34px, 6vw, 62px);
+  line-height: 1.05
+}
+
+.hero-copy>p:not(.eyebrow) {
+  font-size: 14px;
+  line-height: 1.8
+}
+
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 28px 18px
+}
+
+.product-image {
+  height: clamp(240px, 30vw, 400px)
+}
+
+.product-details h3 {
+  font-size: 14px
+}
+
+.product-details p {
+  font-size: 10px;
+  line-height: 1.6
+}
+
+.product-price {
+  font-size: 12px
+}
+
+.manifesto {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 28px;
+  padding: 80px 8vw
+}
+
+.manifesto h2 {
+  font-size: clamp(22px, 3.2vw, 36px)
+}
+
+.manifesto>p {
+  grid-column: 1/-1;
+  font-size: 13px;
+  line-height: 1.9
+}
+
+.site-footer {
+  padding: 70px 6vw 24px
+}
+
+.footer-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 34px
+}
+
+/* ------------------------------------------------------------------ *
+ * Product detail
+ *
+ * catalog.css pins .product-detail-image to a fixed 610px height and makes
+ * the <img> fill 100% of it. The gallery is a child of that box, so it
+ * overflowed and landed on top of the REVIEWS section. Rebuild the box as
+ * a grid: image on top (fixed ratio), thumbnails in their own row beneath.
+ * ------------------------------------------------------------------ */
+
+.product-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+  gap: 46px;
+  align-items: start
+}
+
+.product-detail-image {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 12px;
+  height: auto;
+  min-width: 0;
+  background: transparent;
+  position: relative
+}
+
+/* the tag badge positions against the image, not the whole column */
+.product-detail-image>span {
+  position: absolute;
+  top: -18px;
+  left: 7px;
+  z-index: 1
+}
+
+.product-detail-image>#detail-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 560px;
+  aspect-ratio: 4/5;
+  object-fit: cover;
+  background: #f0f3f1
+}
+
+.detail-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  margin: 0
+}
+
+.detail-gallery button {
+  position: relative;
+  border: 1px solid var(--line);
+  background: #f0f3f1;
+  padding: 0;
+  cursor: pointer;
+  aspect-ratio: 3/4;
+  overflow: hidden;
+  min-width: 0
+}
+
+.detail-gallery button.active {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink)
+}
+
+.detail-gallery img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block
+}
+
+/* hide the strip entirely when there is only the main photo */
+.detail-gallery:empty {
+  display: none
+}
+
+.size-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px
+}
+
+.size-options button {
+  padding: 13px 16px;
+  font-size: 11px;
+  min-width: 48px
+}
+
+.detail-extra {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 44px;
+  /* clears the thumbnails row that sits under the product image */
+  padding: 72px 6vw 80px;
+  margin-top: 8px
+}
+
+.store-modal-card {
+  width: min(520px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  padding: 32px 26px
+}
+
+.store-modal-card h3 {
+  font-size: 22px
+}
+
+.store-toast {
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  text-align: center
+}
+
+/* ==================================================================
+   5. Breakpoints
+   ================================================================== */
+
+/* ---- large tablets & small laptops ---- */
+@media(max-width:1180px) {
+  .editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px
+  }
+
+  .editor-side {
+    position: static;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px
+  }
+
+  .editor-side .picker,
+  .editor-side .gallery-editor {
+    margin: 0
+  }
+
+  .editor-side>label {
+    grid-column: 1/-1
+  }
+
+  .content-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- tablets ---- */
+@media(max-width:1024px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+  }
+
+  .admin-manage-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-modal.product-editor>.product-editor-form {
+    padding: 0 26px 80px
+  }
+
+  .detail-extra {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- sidebar collapses to a drawer ---- */
+@media(max-width:900px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform .28s ease;
+    z-index: 50;
+    width: 262px;
+    overflow-y: auto
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0)
+  }
+
+  .admin-logo {
+    margin-bottom: 34px
+  }
+
+  .admin-main {
+    margin-left: 0
+  }
+
+  .admin-sidebar-toggle {
+    display: grid
+  }
+
+  .admin-topbar {
+    padding: 24px 26px 20px;
+    height: auto;
+    justify-content: flex-end;
+    align-items: center
+  }
+
+  .admin-topbar>div:first-child {
+    margin-right: auto;
+    padding-left: 54px
+  }
+
+  .admin-topbar h1 {
+    font-size: 20px
+  }
+
+  .admin-content {
+    padding: 26px 26px 60px
+  }
+
+  .admin-modal.product-editor>.product-editor-form>.editor-bar {
+    padding-left: 52px
+  }
+
+  .product-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}/* ---- tablets: editor is single-column, so the six-column size table would
+   squeeze its inputs. Switch to labelled cards so nothing is cramped. ---- */
+@media(min-width:761px) and (max-width:1180px) {
+  .size-table {
+    border: 0;
+    padding: 0;
+    background: none;
+    overflow: visible
+  }
+
+  .size-table-head {
+    display: none
+  }
+
+  .size-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    min-width: 0;
+    align-items: end;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 16px;
+    margin-bottom: 12px
+  }
+
+  .size-row .size-field>span {
+    display: block;
+    margin-bottom: 6px;
+    letter-spacing: .5px
+  }
+
+  .size-row .size-field-label {
+    grid-column: span 1
+  }
+
+  .size-row .row-danger {
+    width: 100%;
+    height: 38px;
+    border-radius: 2px;
+    border: 1px solid var(--line);
+    font-size: 0;
+    align-self: end
+  }
+
+  .size-row .row-danger::after {
+    content: 'Remove size';
+    font-size: 11px;
+    color: var(--accent)
+  }
+}
+
+/* ---- phones ---- */
+@media(max-width:760px) {
+  .stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px
+  }
+
+  .stat-card {
+    min-height: 0;
+    padding: 18px
+  }
+
+  .stat-card>strong {
+    font-size: 22px;
+    margin: 14px 0 6px
+  }
+
+  .page-heading {
+    flex-direction: column;
+    align-items: stretch
+  }
+
+  .page-heading .button,
+  .heading-actions .button {
+    width: 100%
+  }
+
+  .heading-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px
+  }
+
+  /* --- full-page editor header --- */
+  .admin-modal.product-editor>.product-editor-form {
+    padding: 0 16px 70px
+  }
+
+  .admin-modal.product-editor>.product-editor-form>.editor-bar {
+    padding: 16px 0 14px;
+    gap: 12px;
+    margin-bottom: 20px
+  }
+
+  .admin-modal.product-editor>.product-editor-form>.editor-bar .modal-close {
+    display: none
+  }
+
+  .editor-bar-titles h3 {
+    font-size: 20px
+  }
+
+  .editor-bar-actions {
+    width: 100%;
+    margin-left: 0
+  }
+
+  .editor-bar-actions .button {
+    flex: 1;
+    min-width: 0
+  }
+
+  /* --- size rows become labelled cards, nothing hidden --- */
+  .size-table {
+    border: 0;
+    padding: 0;
+    background: none;
+    overflow: visible
+  }
+
+  .size-table-head {
+    display: none
+  }
+
+  .size-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    min-width: 0;
+    align-items: end;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px
+  }
+
+  .size-row .size-field>span {
+    display: block;
+    margin-bottom: 6px;
+    letter-spacing: .5px
+  }
+
+  .size-row .size-field-label {
+    grid-column: 1/-1
+  }
+
+  .size-row .row-danger {
+    grid-column: 1/-1;
+    justify-self: end;
+    width: 100%;
+    border-radius: 2px;
+    border: 1px solid var(--line)
+  }
+
+  .size-row .row-danger::after {
+    content: 'Remove this size';
+    font-size: 11px;
+    color: var(--accent)
+  }
+
+  .size-row .row-danger {
+    font-size: 0;
+    height: 38px
+  }
+
+  .size-table-foot {
+    flex-direction: column;
+    align-items: stretch
+  }
+
+  .size-table-foot .button,
+  .size-preset {
+    width: 100%
+  }
+
+  .size-totals {
+    margin-left: 0;
+    text-align: center
+  }
+
+  /* --- picker stacks --- */
+  .picker {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center
+  }
+
+  .picker-preview {
+    width: 120px;
+    height: 150px
+  }
+
+  .picker-buttons {
+    justify-content: center
+  }
+
+  /* --- order rows stack --- */
+  .page-order-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+    padding: 14px 0
+  }
+
+  .page-order-main {
+    grid-column: 1/-1
+  }
+
+  .page-order-row>span {
+    font-size: 12px
+  }
+
+  .page-order-row select {
+    width: 100%
+  }
+
+  .page-customer-row,
+  .customer-page-head {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+    padding: 14px 0
+  }
+
+  .page-customer-row>div:first-child {
+    grid-column: 1/-1
+  }
+
+  .page-customer-row button {
+    grid-column: 1/-1
+  }
+
+  .customer-page-head {
+    display: none
+  }
+
+  /* --- product rows stack --- */
+  .product-row-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px
+  }
+
+  .row-actions {
+    grid-column: 1/-1;
+    display: flex;
+    gap: 16px
+  }
+
+  .size-chips {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr))
+  }
+
+  .product-row-foot {
+    gap: 12px;
+    font-size: 10px
+  }
+
+  .order-sheet-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px
+  }
+
+  .order-sheet-line span:nth-child(2) {
+    grid-column: 1/-1;
+    order: 3
+  }
+
+  /* --- storefront --- */
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 12px
+  }
+
+  .product-image {
+    height: auto;
+    aspect-ratio: 3/4
+  }
+
+  .collection-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px
+  }
+
+  .section {
+    padding: 56px 5vw
+  }
+
+  .manifesto {
+    padding: 56px 6vw;
+    grid-template-columns: minmax(0, 1fr);
+    text-align: left
+  }
+
+  .hero-copy {
+    left: 6vw;
+    right: 6vw
+  }
+
+  .site-header,
+  .catalog-header {
+    padding: 14px 16px;
+    gap: 10px
+  }
+
+  .header-actions {
+    gap: 12px
+  }
+
+  .detail-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr))
+  }
+
+  .detail-extra {
+    padding: 40px 5vw 60px;
+    gap: 30px
+  }
+}
+
+/* ---- very small phones ---- */
+@media(max-width:400px) {
+  .admin-content {
+    padding: 22px 16px 50px
+  }
+
+  .admin-topbar {
+    padding: 20px 16px 18px
+  }
+
+  .admin-modal.product-editor>.product-editor-form {
+    padding: 0 14px 60px
+  }
+
+  .product-grid {
+    grid-template-columns: minmax(0, 1fr)
+  }
+
+  .size-row {
+    grid-template-columns: minmax(0, 1fr)
+  }
+
+  .size-chips {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr))
+  }
+
+  .store-modal-card {
+    padding: 26px 18px
+  }
+
+  .store-modal .button {
+    min-width: 0;
+    flex: 1
+  }
+
+  /* phone header: nav + actions on one row, wordmark below */
+  .site-header,
+  .catalog-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nav actions" "logo logo";
+    row-gap: 10px;
+    height: auto;
+    min-height: 0;
+    padding: 14px 16px
+  }
+
+  .site-header .desktop-nav {
+    grid-area: nav;
+    min-width: 0;
+    gap: 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start
+  }
+
+  .site-header .desktop-nav::-webkit-scrollbar {
+    display: none
+  }
+
+  .site-header .desktop-nav a {
+    white-space: nowrap
+  }
+
+  .site-header .wordmark {
+    grid-area: logo
+  }
+
+  .site-header .brand-logo {
+    height: clamp(34px, 10vw, 44px)
+  }
+
+  .site-header .header-actions {
+    grid-area: actions;
+    gap: 14px;
+    justify-self: end
+  }
+
+  /* keep "Search" on phones ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â styles.css hides it below 850px */
+  .site-header .header-link {
+    display: inline-block !important
+  }
+
+  .filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 4px
+  }
+
+  .filter-row::-webkit-scrollbar {
+    display: none
+  }
+}
+
+/* ---- short landscape phones ---- */
+@media(max-height:520px) and (orientation:landscape) {
+  .admin-topbar {
+    height: auto;
+    padding-top: 16px;
+    padding-bottom: 16px
+  }
+
+  .admin-modal.product-editor>.product-editor-form>.editor-bar {
+    position: static
+  }
+}

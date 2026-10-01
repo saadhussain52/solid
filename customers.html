@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customers | Solids Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="premium.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="responsive.css">
+</head>
+
+<body class="admin-body admin-page">
+  <aside class="admin-sidebar">
+    <a class="wordmark admin-logo" href="admin.html"><img class="brand-logo" src="solids-logo-transparent.png"
+        alt="Solids"></a>
+    <p class="admin-label">WORKSPACE</p>
+    <nav>
+      <a class="admin-nav" href="admin.html">▦ <span>Overview</span></a>
+      <a class="admin-nav" href="products.html">◇ <span>Products &amp; inventory</span></a>
+      <a class="admin-nav" href="orders.html">□ <span>Orders</span></a>
+      <a class="admin-nav" href="categories.html">▧ <span>Categories &amp; banners</span></a>
+      <a class="admin-nav active" href="customers.html">○ <span>Customers</span></a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
+      <div class="admin-user">
+        <div class="avatar">SA</div>
+        <div><strong>Studio Admin</strong><small>solids@studio.pk</small></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div>
+        <p class="eyebrow">STORE MANAGEMENT</p>
+        <h1>Customers</h1>
+      </div>
+      <div class="admin-top-actions">
+        <div class="admin-avatar">SA</div>
+      </div>
+    </header>
+
+    <section class="admin-content admin-page-content">
+      <div class="page-heading">
+        <div>
+          <h2>Customer directory</h2>
+          <p class="muted">Customers are added automatically when someone checks out on the storefront.</p>
+        </div>
+        <span class="muted" id="customers-page-count"></span>
+      </div>
+
+      <section class="panel admin-section">
+        <div class="page-table-head customer-page-head"><span>CUSTOMER</span><span>ORDERS</span><span>LIFETIME
+            SPEND</span><span>STATUS</span><span></span></div>
+        <div id="customers-page-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <div class="toast" id="admin-toast"></div>
+  <script>window.ADMIN_PAGE = 'customers.html';</script>
+  <script src="store-data.js"></script>
+  <script src="admin-pages.js"></script>
+</body>
+
+</html>

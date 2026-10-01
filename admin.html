@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solids Studio | Store dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
+  <link rel="stylesheet" href="premium.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="responsive.css">
+</head>
+
+<body class="admin-body admin-page">
+  <aside class="admin-sidebar">
+    <a class="wordmark admin-logo" href="admin.html" aria-label="Solids home"><img class="brand-logo"
+        src="solids-logo-transparent.png" alt="Solids — No prints, just style"></a>
+    <p class="admin-label">WORKSPACE</p>
+    <nav>
+      <a class="admin-nav active" href="admin.html">▦ <span>Overview</span></a>
+      <a class="admin-nav" href="products.html">◇ <span>Products &amp; inventory</span></a>
+      <a class="admin-nav" href="orders.html">□ <span>Orders</span></a>
+      <a class="admin-nav" href="categories.html">▧ <span>Categories &amp; banners</span></a>
+      <a class="admin-nav" href="customers.html">○ <span>Customers</span></a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
+      <button class="admin-nav reset-store" id="reset-store" type="button">⟲ <span>Reset demo data</span></button>
+      <div class="admin-user">
+        <div class="avatar">SA</div>
+        <div><strong>Studio Admin</strong><small>solids@studio.pk</small></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div>
+        <p class="eyebrow">TODAY</p>
+        <h1>Good morning, Sarah.</h1>
+      </div>
+      <div class="admin-top-actions">
+        <a class="button button-dark" href="index.html" target="_blank" rel="noopener">View storefront ↗</a>
+        <div class="admin-avatar">SA</div>
+      </div>
+    </header>
+
+    <section class="admin-content admin-page-content">
+      <div class="page-heading">
+        <div>
+          <h2>Overview</h2>
+          <p class="muted">Everything on your storefront is managed from this workspace — products, sizes, stock,
+            prices, images and texts.</p>
+        </div>
+        <button class="button button-dark" id="add-product">+ Add product</button>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-top"><span>NET SALES</span></div><strong id="stat-revenue">Rs. 0</strong><small>From all paid
+            &amp; pending orders</small>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><span>ORDERS</span></div><strong id="stat-orders">0</strong><small><span
+              id="stat-pending">0</span> awaiting fulfilment</small>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><span>AVERAGE ORDER</span></div><strong id="stat-average">Rs. 0</strong><small><span
+              id="stat-customers">0</span> registered customers</small>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><span>NEEDS ATTENTION</span></div><strong id="stat-low-stock">0</strong><small>Low or
+            out-of-stock sizes · <a class="stat-action" href="products.html">Review inventory →</a></small>
+        </div>
+      </div>
+
+      <div class="admin-manage-columns">
+        <section class="panel admin-section">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">STOCK ALERTS</p>
+              <h3>Sizes running out</h3>
+              <p class="muted">Anything at 10 units or less — cut through on the website automatically.</p>
+            </div><a class="text-link" href="products.html">Manage ↗</a>
+          </div>
+          <div id="overview-low-stock"></div>
+        </section>
+
+        <section class="panel admin-section">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">INVENTORY VALUE</p>
+              <h3>Stock &amp; profit</h3>
+              <p class="muted">Based on your per-size cost and selling price.</p>
+            </div>
+          </div>
+          <div class="quick-stat-list">
+            <div><span>Stock value</span><strong id="stat-stock-value">Rs. 0</strong></div>
+            <div><span>Potential profit</span><strong id="stat-profit">Rs. 0</strong></div>
+            <div><span>Units in stock</span><strong id="stat-units">0</strong></div>
+            <div><span>Units sold</span><strong id="stat-sold">0</strong></div>
+            <div><span>Live products</span><strong id="stat-products">0</strong></div>
+            <div><span>Unavailable sizes</span><strong id="stat-unavailable">0</strong></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="admin-manage-columns">
+        <section class="panel admin-section">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">ACTIVITY</p>
+              <h3>Recent orders</h3>
+              <p class="muted">Newest orders placed on the storefront.</p>
+            </div><a class="text-link" href="orders.html">View all ↗</a>
+          </div>
+          <div class="orders-list" id="overview-recent-orders"></div>
+        </section>
+        <section class="panel admin-section">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">BESTSELLERS</p>
+              <h3>Top products</h3>
+              <p class="muted">Ranked by units sold.</p>
+            </div>
+          </div>
+          <div id="overview-top-products"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="admin-toast"></div>
+  <script>window.ADMIN_PAGE = 'admin';</script>
+  <script src="store-data.js"></script>
+  <script src="admin-pages.js"></script>
+  <script>
+    document.querySelector('#add-product').addEventListener('click', () => window.editProduct());
+    document.querySelector('#reset-store').addEventListener('click', () => {
+      if (!confirm('Reset every product, image, price, size, order and text back to the demo data?')) return;
+      Store.resetAll();
+      window.refreshAdmin();
+      window.pageToast('Store reset to demo data');
+    });
+  </script>
+</body>
+
+</html>

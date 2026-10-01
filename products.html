@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Products &amp; Inventory | Solids Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="premium.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="responsive.css">
+</head>
+
+<body class="admin-body admin-page">
+  <aside class="admin-sidebar">
+    <a class="wordmark admin-logo" href="admin.html"><img class="brand-logo" src="solids-logo-transparent.png"
+        alt="Solids"></a>
+    <p class="admin-label">WORKSPACE</p>
+    <nav>
+      <a class="admin-nav" href="admin.html">▦ <span>Overview</span></a>
+      <a class="admin-nav active" href="products.html">◇ <span>Products &amp; inventory</span></a>
+      <a class="admin-nav" href="orders.html">□ <span>Orders</span></a>
+      <a class="admin-nav" href="categories.html">▧ <span>Categories &amp; banners</span></a>
+      <a class="admin-nav" href="customers.html">○ <span>Customers</span></a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
+      <div class="admin-user">
+        <div class="avatar">SA</div>
+        <div><strong>Studio Admin</strong><small>solids@studio.pk</small></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div>
+        <p class="eyebrow">STORE MANAGEMENT</p>
+        <h1>Products &amp; inventory</h1>
+      </div>
+      <div class="admin-top-actions">
+        <div class="admin-avatar">SA</div>
+      </div>
+    </header>
+
+    <section class="admin-content admin-page-content">
+      <div class="page-heading">
+        <div>
+          <h2>Catalogue</h2>
+          <p class="muted">Manage images, sizes, how many pieces you have, what each size costs you and what each size
+            sells for. Sizes at zero stock are cut through on the website.</p>
+        </div>
+        <button class="button button-dark" id="page-add-product">+ Add product</button>
+      </div>
+
+      <section class="panel admin-section">
+        <div class="inventory-toolbar">
+          <input type="search" id="product-search" placeholder="Search products…">
+          <div class="filter-chips" id="product-filters">
+            <button class="filter active" data-filter="all">All</button>
+            <button class="filter" data-filter="low">Low stock</button>
+            <button class="filter" data-filter="out">Sizes sold out</button>
+            <button class="filter" data-filter="sold">Selling</button>
+          </div>
+          <span class="muted" id="products-page-count"></span>
+        </div>
+        <div id="products-page-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <div class="toast" id="admin-toast"></div>
+  <script>window.ADMIN_PAGE = 'products.html';</script>
+  <script src="store-data.js"></script>
+  <script src="admin-pages.js"></script>
+  <script>
+    document.querySelector('#page-add-product').addEventListener('click', () => window.editProduct());
+    document.querySelector('#product-search').addEventListener('input', () => window.refreshAdmin());
+    document.querySelectorAll('#product-filters .filter').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('#product-filters .filter').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      window.__productFilter = button.dataset.filter;
+      window.refreshAdmin();
+    }));
+  </script>
+</body>
+
+</html>

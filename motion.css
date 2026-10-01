@@ -1,0 +1,110 @@
+/* ==========================================================================
+   Solids — motion & interaction layer
+   Loaded after styles.css / catalog.css / premium.css so these refinements
+   build on the existing design. All entrance animation is opt-in through the
+   `motion-ready` class on <html>, which motion.js adds ONLY when the visitor
+   has not asked for reduced motion — so content is never hidden if JS fails.
+   ========================================================================== */
+
+:root{
+  --ease-out:cubic-bezier(.22,.61,.36,1);
+  --ease-soft:cubic-bezier(.4,0,.2,1);
+  --motion-shadow:0 26px 60px rgba(43,36,29,.12);
+}
+
+::selection{background:var(--accent);color:#fff}
+
+body::-webkit-scrollbar{width:10px}
+body::-webkit-scrollbar-track{background:transparent}
+body::-webkit-scrollbar-thumb{background:#cfc9c0;border:2px solid var(--paper);border-radius:20px}
+body::-webkit-scrollbar-thumb:hover{background:#b4ada2}
+
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* --- reading progress + back to top ------------------------------------- */
+.motion-progress{position:fixed;top:0;left:0;right:0;height:2px;z-index:70;pointer-events:none}
+.motion-progress i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:0 50%;background:linear-gradient(90deg,var(--accent),#2c2a27)}
+.motion-top{position:fixed;right:26px;bottom:26px;z-index:35;width:46px;height:46px;border:1px solid var(--line);background:rgba(248,247,243,.92);color:var(--ink);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:grid;place-items:center;font-size:15px;cursor:pointer;opacity:0;transform:translateY(16px);pointer-events:none;transition:opacity .4s var(--ease-out),transform .4s var(--ease-out),background .3s,color .3s,border-color .3s}
+.motion-top.is-visible{opacity:1;transform:none;pointer-events:auto}
+.motion-top:hover{background:var(--ink);color:#f7f3ec;border-color:var(--ink)}
+
+/* --- scroll reveal ------------------------------------------------------- */
+html.motion-ready [data-reveal]{opacity:0;transform:translate3d(0,30px,0);transition:opacity .9s var(--ease-out),transform .9s var(--ease-out);transition-delay:var(--reveal-delay,0ms);will-change:opacity,transform}
+html.motion-ready [data-reveal="fade"]{transform:none}
+html.motion-ready [data-reveal="left"]{transform:translate3d(-38px,0,0)}
+html.motion-ready [data-reveal="right"]{transform:translate3d(38px,0,0)}
+html.motion-ready [data-reveal="scale"]{transform:translate3d(0,22px,0) scale(.965)}
+html.motion-ready [data-reveal].is-revealed{opacity:1;transform:none}
+
+/* --- word-by-word heading reveal ---------------------------------------- */
+html.motion-ready .reveal-words .motion-word{display:inline-block}
+html.motion-ready .reveal-words .motion-word-inner{display:inline-block;transform:translate3d(0,.5em,0);opacity:0;transition:transform .8s var(--ease-out),opacity .8s var(--ease-out)}
+html.motion-ready .reveal-words.is-revealed .motion-word-inner{transform:none;opacity:1}
+
+/* --- hero & banner image entrances -------------------------------------- */
+html.motion-ready .hero>img{animation:solids-hero-zoom 1.9s var(--ease-out) both}
+@keyframes solids-hero-zoom{from{transform:scale(1.08)}to{transform:scale(1)}}
+html.motion-ready .all-banner img{transform:scale(1.08);transition:transform 1.2s var(--ease-out)}
+html.motion-ready .all-banner.is-revealed img{transform:scale(1)}
+
+/* --- sticky header state ------------------------------------------------- */
+.site-header{transition:box-shadow .4s var(--ease-soft),background .4s var(--ease-soft)}
+.site-header.is-scrolled{box-shadow:0 12px 36px rgba(43,36,29,.09)}
+
+/* --- buttons ------------------------------------------------------------- */
+.button{position:relative;overflow:hidden;isolation:isolate}
+.button::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(120deg,transparent 12%,rgba(255,255,255,.34) 50%,transparent 88%);transform:translateX(-130%);transition:transform .75s var(--ease-out)}
+.button:hover::before{transform:translateX(130%)}
+.button>span{transition:transform .3s var(--ease-out)}
+.button:hover>span{transform:translate3d(3px,-3px,0)}
+
+/* --- links --------------------------------------------------------------- */
+.text-link span{display:inline-block;transition:transform .3s var(--ease-out)}
+.text-link:hover span{transform:translate3d(5px,-5px,0)}
+.desktop-nav a,.header-link{transition:color .25s}
+.breadcrumbs a{transition:color .25s}
+.breadcrumbs a:hover{color:var(--ink)}
+.site-footer .footer-links a{transition:color .25s,border-color .25s,padding-left .3s var(--ease-out)}
+.site-footer .footer-links a:hover{padding-left:5px}
+
+/* --- collection cards ---------------------------------------------------- */
+.collection-card{transition:transform .5s var(--ease-out),box-shadow .5s var(--ease-out)}
+.collection-card::after{transition:opacity .5s var(--ease-out)}
+.collection-card:hover::after{opacity:.82}
+.collection-card img{transition:transform .9s var(--ease-out)}
+.collection-label em{transition:transform .45s var(--ease-out)}
+.collection-card:hover .collection-label em{transform:translateX(5px)}
+.catalog-collection-card img{transition:transform .9s var(--ease-out),filter .5s}
+.catalog-collection-card:hover img{transform:scale(1.05)}
+
+/* --- product cards ------------------------------------------------------- */
+.product-card{transition:transform .5s var(--ease-out)}
+.product-card:hover{transform:translateY(-6px)}
+.product-image{transition:box-shadow .5s var(--ease-out)}
+.product-card:hover .product-image{box-shadow:var(--motion-shadow)}
+.product-image img{transition:transform .85s var(--ease-out)}
+.product-card:hover .product-image img{transform:scale(1.06)}
+.product-badge{background:rgba(248,247,243,.9);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);font-weight:600;letter-spacing:.5px}
+.quick-add{font-weight:500;letter-spacing:.6px}
+.product-details h3 a{background-image:linear-gradient(currentColor,currentColor);background-position:0 100%;background-repeat:no-repeat;background-size:0 1px;transition:background-size .35s var(--ease-out),color .25s}
+.product-details h3 a:hover{color:var(--accent);background-size:100% 1px}
+
+/* --- filters, sizes & misc controls ------------------------------------- */
+.filter,.catalog-filter{transition:color .3s,border-color .3s}
+.filter:hover,.catalog-filter:hover{color:var(--ink)}
+.size-options button{transition:border-color .25s,background .25s,color .25s,transform .25s var(--ease-out)}
+.size-options button:hover:not(:disabled){border-color:var(--ink);transform:translateY(-2px)}
+.quantity button{transition:color .25s}
+.quantity button:hover{color:var(--accent)}
+.product-actions button{transition:transform .3s var(--ease-out),color .3s}
+.product-actions button:hover{transform:translateY(-3px);color:var(--accent)}
+.buy-now{transition:background .3s,transform .3s var(--ease-out)}
+.buy-now:hover{background:#9d8079;transform:translateY(-2px)}
+
+/* --- slide-over panels --------------------------------------------------- */
+.search-panel,.cart-drawer{box-shadow:-24px 0 70px rgba(25,22,20,.16)}
+
+/* --- reduced motion ------------------------------------------------------ */
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+}

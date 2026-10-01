@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Categories, Banners &amp; Website Text | Solids Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="admin.css"><link rel="stylesheet" href="premium.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="responsive.css">
+</head>
+<body class="admin-body admin-page">
+  <aside class="admin-sidebar">
+    <a class="wordmark admin-logo" href="admin.html"><img class="brand-logo" src="solids-logo-transparent.png" alt="Solids"></a>
+    <p class="admin-label">WORKSPACE</p>
+    <nav>
+      <a class="admin-nav" href="admin.html">▦ <span>Overview</span></a>
+      <a class="admin-nav" href="products.html">◇ <span>Products &amp; inventory</span></a>
+      <a class="admin-nav" href="orders.html">□ <span>Orders</span></a>
+      <a class="admin-nav active" href="categories.html">▧ <span>Categories &amp; banners</span></a>
+      <a class="admin-nav" href="customers.html">○ <span>Customers</span></a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
+      <div class="admin-user"><div class="avatar">SA</div><div><strong>Studio Admin</strong><small>solids@studio.pk</small></div></div>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div><p class="eyebrow">STORE MANAGEMENT</p><h1>Categories, banners &amp; website text</h1></div>
+      <div class="admin-top-actions"><div class="admin-avatar">SA</div></div>
+    </header>
+
+    <section class="admin-content admin-page-content">
+      <div class="page-heading">
+        <div><h2>Storefront control</h2><p class="muted">Change categories, collection tiles, campaign banners and every headline on the website. Saves show up instantly.</p></div>
+        <span class="muted" id="categories-page-count"></span>
+      </div>
+
+      <div class="admin-manage-columns">
+        <section class="panel admin-section">
+          <div class="panel-head">
+            <div><p class="eyebrow">NAVIGATION</p><h3>Categories</h3><p class="muted">These become the shop filters automatically.</p></div>
+            <button class="button button-dark" id="page-add-category">+ Add</button>
+          </div>
+          <div id="categories-page-list"></div>
+        </section>
+
+        <section class="panel admin-section">
+          <div class="panel-head">
+            <div><p class="eyebrow">HERO SLIDES</p><h3>Homepage banners</h3><p class="muted">The first live banner becomes the homepage hero.</p></div>
+            <button class="button button-dark" id="page-add-banner">+ Add</button>
+          </div>
+          <div id="banners-page-list"></div>
+        </section>
+      </div>
+
+      <section class="panel admin-section">
+        <div class="panel-head">
+          <div><p class="eyebrow">HOMEPAGE TILES</p><h3>Collections</h3><p class="muted">Rename them or swap the front image of each tile.</p></div>
+          <button class="button button-dark" id="page-add-collection">+ Add</button>
+        </div>
+        <div id="collections-page-list"></div>
+      </section>
+
+      <section class="panel admin-section">
+        <div class="panel-head">
+          <div><p class="eyebrow">WEBSITE COPY</p><h3>Every text &amp; image on the homepage</h3><p class="muted">Announcement bar, hero, collections, new arrivals, story section and footer.</p></div>
+        </div>
+        <div id="content-editor"></div>
+      </section>
+    </section>
+  </main>
+
+  <div class="toast" id="admin-toast"></div>
+  <script>window.ADMIN_PAGE = 'categories.html';</script>
+  <script src="store-data.js"></script>
+  <script src="admin-pages.js"></script>
+  <script>
+    document.querySelector('#page-add-category').addEventListener('click', () => {
+      const name = prompt('Category name');
+      if (!name || !name.trim()) return;
+      if (!Store.addCategory(name.trim())) { window.pageToast('That category already exists'); return; }
+      window.refreshAdmin();
+      window.pageToast('Category added');
+    });
+
+    document.querySelector('#page-add-collection').addEventListener('click', () => {
+      const name = prompt('Collection name');
+      if (!name || !name.trim()) return;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async () => {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+          Store.upsertCollection(-1, { name: name.trim(), image: reader.result });
+          window.refreshAdmin();
+          window.pageToast('Collection added');
+        };
+        if (file) reader.readAsDataURL(file);
+        else { Store.upsertCollection(-1, { name: name.trim(), image: '' }); window.refreshAdmin(); }
+      };
+      input.click();
+    });
+
+    document.querySelector('#page-add-banner').addEventListener('click', () => {
+      const title = prompt('Banner heading', 'New collection');
+      if (!title) return;
+      const subtitle = prompt('Banner subtitle', 'Live now') || '';
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            Store.upsertBanner(-1, { title, subtitle, image: reader.result });
+            window.refreshAdmin();
+            window.pageToast('Banner added');
+          };
+          reader.readAsDataURL(file);
+        } else {
+          Store.upsertBanner(-1, { title, subtitle, image: Store.IMAGE.banner });
+          window.refreshAdmin();
+          window.pageToast('Banner added');
+        }
+      };
+      input.click();
+    });
+  </script>
+</body>
+</html>

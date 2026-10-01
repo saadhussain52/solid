@@ -1,0 +1,288 @@
+/* ==========================================================================
+   Solids — editorial design refinement
+   --------------------------------------------------------------------------
+   A purely visual layer that sits on top of styles.css / catalog.css /
+   premium.css / motion.css. It is linked LAST in every storefront page, so it
+   only tightens typography, spacing, cards, controls and small details — no
+   layout restructuring and no behaviour — and can safely be removed.
+   ========================================================================== */
+
+:root{
+  --hairline:rgba(41,40,39,.13);
+  --radius-sm:2px;
+  --shadow-card:0 28px 54px -32px rgba(41,36,30,.45);
+}
+
+/* --- base type ----------------------------------------------------------- */
+body{
+  font-size:14.5px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* --- eyebrow gets a short accent rule ----------------------------------- */
+.eyebrow{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  letter-spacing:2px;
+}
+
+.eyebrow::before{
+  content:'';
+  width:22px;
+  height:1px;
+  background:currentColor;
+  opacity:.55;
+  flex:none;
+}
+
+.catalog-sidebar .eyebrow::before{display:none}
+
+/* --- section rhythm ------------------------------------------------------ */
+.section{padding:clamp(76px,9vw,124px) 6vw}
+
+.section-note{
+  letter-spacing:.2px;
+  line-height:1.75;
+}
+
+.section-heading h2,
+.manifesto h2{
+  letter-spacing:-.5px;
+}
+
+/* --- header / nav -------------------------------------------------------- */
+.site-header{border-bottom:1px solid var(--hairline)}
+
+.desktop-nav{letter-spacing:.4px}
+
+.header-link,
+.cart-trigger{letter-spacing:.4px}
+
+/* --- collections --------------------------------------------------------- */
+.collection-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+
+.collection-card,
+.collection-tall{height:auto;aspect-ratio:3/4;grid-row:auto}
+
+@media(max-width:1024px){
+  .collection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:480px){
+  .collection-grid{grid-template-columns:1fr}
+  .collection-card{aspect-ratio:4/5}
+}
+
+.collection-card::after{
+  background:linear-gradient(transparent 44%,rgba(20,18,16,.68));
+}
+
+.collection-label span{
+  font-size:10px;
+  color:var(--accent);
+  opacity:1;
+  letter-spacing:1.5px;
+}
+
+.collection-label strong{
+  font-size:12.5px;
+  letter-spacing:2.6px;
+}
+
+.collection-label em{
+  color:rgba(255,255,255,.86);
+  letter-spacing:1px;
+}
+
+/* --- product cards ------------------------------------------------------- */
+.product-grid{gap:30px 20px}
+
+.product-image,
+.catalog-product-grid .product-image{
+  height:auto;
+  aspect-ratio:3/4;
+  background:linear-gradient(180deg,#eae6de,#e2ddd4);
+}
+
+.product-badge{
+  background:var(--ink);
+  color:#f7f3ec;
+  font-size:9px;
+  font-weight:600;
+  letter-spacing:1.4px;
+  text-transform:uppercase;
+  padding:8px 11px;
+}
+
+.quick-add{
+  background:rgba(248,247,243,.92);
+  -webkit-backdrop-filter:blur(9px);
+  backdrop-filter:blur(9px);
+  border-top:1px solid var(--hairline);
+  color:var(--ink);
+  font-size:10px;
+  font-weight:500;
+  letter-spacing:1.3px;
+  text-transform:uppercase;
+  padding:16px;
+}
+
+.quick-add span{color:var(--accent);padding-left:7px}
+
+.product-details{
+  align-items:flex-start;
+  padding:17px 2px 22px;
+}
+
+.product-details h3{font-size:12.5px;letter-spacing:.2px}
+
+.product-details p{
+  font-size:10px;
+  letter-spacing:1.2px;
+  text-transform:uppercase;
+}
+
+.product-price{
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.3px;
+}
+
+/* --- filters ------------------------------------------------------------- */
+.filter-row{gap:30px}
+
+.filter{
+  font-size:10px;
+  letter-spacing:1.4px;
+  text-transform:uppercase;
+}
+
+/* --- manifesto ----------------------------------------------------------- */
+.manifesto{
+  background:#d9d4ca;
+  padding:clamp(84px,10vw,138px) 12vw;
+}
+
+.manifesto-mark{
+  font-size:88px;
+  color:var(--accent);
+  opacity:.9;
+}
+
+.manifesto>p{
+  color:#5a5650;
+  font-size:14px;
+  line-height:1.9;
+}
+
+/* --- product detail ------------------------------------------------------ */
+.all-heading{
+  border-bottom:1px solid var(--hairline);
+  padding-bottom:16px;
+}
+
+.all-heading h2{
+  font-size:34px;
+  letter-spacing:-.5px;
+}
+
+.breadcrumbs{letter-spacing:.6px}
+
+.detail-description{
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;
+  line-height:1.85;
+  color:#5f5b55;
+}
+
+.product-copy h1{letter-spacing:-.3px}
+
+.size-options button,
+.quantity,
+.detail-add,
+.buy-now{border-radius:var(--radius-sm)}
+
+.buy-now{letter-spacing:.6px;font-weight:600}
+
+/* --- related products ---------------------------------------------------- */
+.related-products{
+  padding:0 6vw 96px;
+  border-top:1px solid var(--hairline);
+  padding-top:56px;
+  margin-top:20px;
+}
+
+.related-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+  margin-bottom:34px;
+}
+
+.related-head .eyebrow{margin:0}
+
+.related-view-all{
+  font-family:'DM Sans',sans-serif;
+  font-size:10px;
+  letter-spacing:1.4px;
+  text-transform:uppercase;
+  color:#5f5b55;
+  border-bottom:1px solid var(--hairline);
+  padding-bottom:3px;
+  transition:color .3s,border-color .3s;
+}
+
+.related-view-all:hover{color:var(--ink);border-color:var(--ink)}
+
+.related-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:30px 20px;
+}
+
+@media(max-width:1024px){
+  .related-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:560px){
+  .related-products{padding-left:5vw;padding-right:5vw}
+  .related-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 14px}
+}
+
+/* --- footer -------------------------------------------------------------- */
+.site-footer{padding:86px 6vw 26px}
+
+.footer-links{gap:36px}
+
+.site-footer .eyebrow{letter-spacing:2px}
+
+.footer-bottom{letter-spacing:.6px}
+
+.newsletter form{transition:border-color .3s}
+
+.newsletter form:focus-within{border-color:var(--accent)}
+
+.newsletter input::placeholder{color:#8b857d}
+
+/* --- buttons ------------------------------------------------------------- */
+.button{
+  border-radius:var(--radius-sm);
+  letter-spacing:1.1px;
+}
+
+.button-light{box-shadow:0 12px 26px -16px rgba(0,0,0,.55)}
+
+.button-dark{box-shadow:0 12px 26px -16px rgba(0,0,0,.45)}
+
+/* --- responsive ---------------------------------------------------------- */
+@media(max-width:850px){
+  .all-heading h2{font-size:27px}
+}
+
+@media(max-width:560px){
+  .product-details p{letter-spacing:.8px}
+}
