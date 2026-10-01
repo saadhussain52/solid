@@ -929,8 +929,8 @@
   width: 100%;
   height: auto;
   max-height: 560px;
-  aspect-ratio: 4/5;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   background: #f0f3f1
 }
 
@@ -1058,6 +1058,11 @@
   .detail-extra {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* short viewports: give the shot whichever room the page has */
+  .product-detail-image>#detail-image {
+    max-height: 460px
+  }
 }
 
 /* ---- sidebar collapses to a drawer ---- */
@@ -1112,6 +1117,11 @@
 
   .product-detail-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* stacked layout: nothing below to clip against, so show it big */
+  .product-detail-image>#detail-image {
+    max-height: 78vh
   }
 }/* ---- tablets: editor is single-column, so the six-column size table would
    squeeze its inputs. Switch to labelled cards so nothing is cramped. ---- */
@@ -1424,6 +1434,11 @@
 
   .detail-gallery {
     grid-template-columns: repeat(3, minmax(0, 1fr))
+  }
+
+  /* phones: the shot is near-full-width; let its height follow the column */
+  .product-detail-image>#detail-image {
+    max-height: none
   }
 
   .detail-extra {
