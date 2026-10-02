@@ -1,0 +1,20 @@
+# Railway deployment for the Solids storefront.
+# The service already exists (project "solid"), so this file only has to tell
+# Railway how to run the code. Apply with: railway up
+#
+# Railway auto-detects `npm start` from package.json, so a build command is not
+# required. There is nothing to install: the server uses only Node built-ins.
+
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "node server.js",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

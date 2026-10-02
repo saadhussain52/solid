@@ -70,32 +70,18 @@
     initSidebar();
   }
 
-  /* ----------------------------------------------------- mobile sidebar */
+  /* ----------------------------------------------------------- sidebar
+
+     The workspace sidebar is a permanent left rail at every width — the same
+     pinned column on a phone as on a laptop. It used to collapse into an
+     off-canvas drawer below 900px, which needed a fixed hamburger that landed
+     on top of the logo. Nothing to wire up now, but any toggle/scrim left in
+     the markup (or an `open` class from a previous session) is cleared so the
+     rail can never be pushed off-screen. */
 
   function initSidebar() {
-    if ($('#sidebar-toggle')) return;
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.id = 'sidebar-toggle';
-    toggle.className = 'admin-sidebar-toggle';
-    toggle.setAttribute('aria-label', 'Open menu');
-    toggle.textContent = '☰';
-
-    const scrim = document.createElement('div');
-    scrim.className = 'admin-sidebar-scrim';
-
-    document.body.appendChild(toggle);
-    document.body.appendChild(scrim);
-
-    const sidebar = $('.admin-sidebar');
-    const close = () => { sidebar?.classList.remove('open'); scrim.classList.remove('show'); };
-    const open = () => { sidebar?.classList.add('open'); scrim.classList.add('show'); };
-
-    toggle.addEventListener('click', () => (sidebar?.classList.contains('open') ? close() : open()));
-    scrim.addEventListener('click', close);
-    document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
-    $$('.admin-sidebar .admin-nav').forEach(link => link.addEventListener('click', close));
-    window.addEventListener('resize', () => { if (window.innerWidth > 900) close(); });
+    $('.admin-sidebar')?.classList.remove('open');
+    $$('#sidebar-toggle, .admin-sidebar-scrim').forEach(el => el.remove());
   }
 
   /* -------------------------------------------------------- image picker */
@@ -888,4 +874,5 @@
 
   // convenience: expose a re-render hook
   window.refreshAdmin = () => { initShell(); const page = PAGES[PAGE]; if (page) page(); };
+  window.openProductEditor = openProductEditor;
 })();

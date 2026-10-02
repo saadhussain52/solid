@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track your order | Solids</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" /><link rel="stylesheet" href="premium.css" /><link rel="stylesheet" href="responsive.css" />
+  <style>
+    .track-page{max-width:760px;margin:0 auto;padding:70px 5vw 90px}
+    .track-form{display:flex;gap:10px;flex-wrap:wrap;margin:26px 0 0}
+    .track-form input{flex:1 1 240px;min-width:0}
+    .track-form button{flex:0 0 auto}
+    .track-status{margin-top:34px}
+    .track-steps{display:grid;gap:0;margin-top:26px;border:1px solid var(--line)}
+    .track-step{display:flex;gap:15px;padding:18px 20px;border-bottom:1px solid var(--line);align-items:flex-start}
+    .track-step:last-child{border-bottom:0}
+    .track-dot{width:11px;height:11px;border-radius:50%;border:1px solid var(--line);margin-top:5px;flex:0 0 auto;background:#fff}
+    .track-step.done .track-dot{background:var(--ink);border-color:var(--ink)}
+    .track-step.current .track-dot{background:var(--ink);border-color:var(--ink);box-shadow:0 0 0 4px rgba(41,40,39,.12)}
+    .track-step-body{min-width:0}
+    .track-step-body strong{display:block;font-size:13px;color:var(--ink)}
+    .track-step-body span{display:block;margin-top:4px;font-size:11.5px;line-height:1.6;color:var(--muted)}
+    .track-step.pending .track-step-body strong{color:var(--muted)}
+    .track-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-top:22px;padding:18px 20px;background:#f7f5f3;border:1px solid var(--line)}
+    .track-meta div{min-width:0}
+    .track-meta dt{font-size:9.5px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted)}
+    .track-meta dd{margin:5px 0 0;font-size:13px;color:var(--ink);word-break:break-word}
+    .track-items{margin-top:22px;display:grid;gap:9px}
+    .track-items div{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted)}
+    .track-items em{font-style:normal;color:var(--ink);white-space:nowrap}
+    .track-empty{margin-top:30px;padding:26px;border:1px solid var(--line);background:#fbfaf9}
+    .track-empty p{margin:0;font-size:12.5px;line-height:1.7;color:var(--muted)}
+    .track-hint{margin-top:14px;font-size:11px;line-height:1.6;color:var(--muted)}
+    /* Several orders matched an email: a list of buttons, not links, so the
+       whole row is a comfortable tap target on a phone. */
+    .track-picks{display:grid;gap:0;margin-top:18px;border:1px solid var(--line);background:#fff}
+    .track-pick{display:flex;gap:16px;justify-content:space-between;align-items:center;width:100%;text-align:left;padding:17px 20px;border:0;border-bottom:1px solid var(--line);background:none;cursor:pointer;font:inherit;color:inherit;transition:background .2s}
+    .track-pick:last-child{border-bottom:0}
+    .track-pick:hover,.track-pick:focus-visible{background:#f7f5f3}
+    .track-pick-main,.track-pick-side{min-width:0}
+    .track-pick-main strong{display:block;font-size:13px;color:var(--ink)}
+    .track-pick-main em{display:block;margin-top:4px;font-style:normal;font-size:11.5px;color:var(--muted)}
+    .track-pick-side{text-align:right;flex:0 0 auto}
+    .track-pick-side b{display:block;font-size:11px;font-weight:500;color:var(--ink)}
+    .track-pick-side em{display:block;margin-top:4px;font-style:normal;font-size:10.5px;color:var(--muted)}
+    @media(max-width:560px){.track-pick{flex-direction:column;align-items:flex-start;gap:10px}.track-pick-side{text-align:left}}
+    @media(max-width:560px){.track-page{padding:44px 5vw 64px}.track-meta{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="announcement">FREE DELIVERY IN ISLAMABAD &amp; RAWALPINDI ON ORDERS ABOVE RS. 10,000 <span>•</span> 4–7 WORKING DAYS</div>
+  <header class="site-header">
+    <nav class="desktop-nav"><a href="index.html">Home</a><a href="all.html">Shop</a></nav>
+    <a class="wordmark" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-transparent.png" alt="Solids — No prints, just style"></a>
+    <div class="header-actions"><a class="header-link" href="all.html">Shop</a><a class="header-link" href="mailto:solids@studio.pk">Contact</a></div>
+  </header>
+
+  <main class="track-page">
+    <p class="eyebrow">ORDER TRACKING</p>
+    <h1 style="font:38px 'Libre Baskerville',serif;margin:14px 0 0">Where is my parcel?</h1>
+    <p class="track-hint">Enter your tracking ID, your order number, or the email address you ordered with.</p>
+
+    <form class="track-form" id="track-form">
+      <input id="track-input" type="text" placeholder="Tracking ID, order number, or your email" required>
+      <button class="button button-dark" type="submit">Track order ↗</button>
+    </form>
+
+    <div class="track-status" id="track-result"></div>
+  </main>
+
+  <footer class="site-footer">
+    <a class="footer-brand" href="index.html"><img class="brand-logo" src="solids-logo-transparent.png" alt="Solids"><p>Everyday, refined.</p></a>
+    <div class="footer-bottom"><span>© 2026 Solids Official</span><span>Pakistan / PKR</span></div>
+  </footer>
+
+  <script src="store-data.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const { money, escapeHtml, escapeAttr } = Store;
+
+      /* Status ladder. Every step here must exist as an option in the admin panel
+         (see ORDER_STATUSES in admin-pages.js) and be accepted by the
+         server, otherwise an order the studio updates shows a blank ladder.
+         Anything the order has not reached yet renders as "pending", so a
+         customer always sees the full journey ahead of them rather than a
+         single vague status word. */
+      const STEPS = [
+        { key: 'Pending', label: 'Order received', note: 'We have your order and are picking and packing your pieces.' },
+        { key: 'Paid', label: 'Payment confirmed', note: 'Payment has cleared.' },
+        { key: 'Processing', label: 'Being packed', note: 'Your pieces are being wrapped and handed to the courier.' },
+        { key: 'Shipped', label: 'Parcel dispatched', note: 'Your parcel has left our studio with the courier.' },
+        { key: 'Delivered', label: 'Delivered', note: 'Your parcel has been delivered. We hope it fits perfectly.' }
+      ];
+
+      const normalise = value => String(value || '').trim().toLowerCase();
+
+      const statusEl = document.querySelector('#track-input');
+
+      const showMessage = html => {
+        document.querySelector('#track-result').innerHTML = html;
+      };
+
+      const showBusy = () => {
+        showMessage('<div class="track-empty"><p>Looking for that order…</p></div>');
+      };
+
+      /* The local browser copy is only a convenience — the order the customer
+         emailed a link to lives on the server, so a link opened on a different
+         device (or in another browser) resolves through the API.
+
+         Returns every match, not just the first: a tracking ID or order number
+         names one order, but an email can have many, and the customer is the
+         only one who knows which parcel they mean. */
+      const findOrders = async raw => {
+        const needle = normalise(raw);
+        if (!needle) return [];
+        const local = Store.state.orders.filter(order =>
+          normalise(order.id) === needle || normalise(order.trackingId) === needle
+        );
+        if (local.length) return [local[0]];
+        try {
+          const result = await Store.api.lookup(raw);
+          if (result && result.ok) {
+            /* Cache them so a refresh on this device is instant, and so the
+               studio's admin panel sees the orders too. */
+            const found = result.orders && result.orders.length
+              ? result.orders
+              : (result.order ? [result.order] : []);
+            found.forEach(Store.adoptOrder);
+            return found;
+          }
+        } catch (error) {
+          /* No server reachable: fall through to "not found". */
+        }
+        return [];
+      };
+
+      /* Submitting the form: look the reference up, showing progress rather
+         than leaving the previous result sitting on screen. One order renders
+         straight away; several come back as a list to pick from. */
+      const search = async raw => {
+        showBusy();
+        const orders = await findOrders(raw);
+        if (orders.length === 1) {
+          render(orders[0]);
+        } else if (orders.length > 1) {
+          renderList(orders, raw);
+        } else {
+          render(null);
+        }
+      };
+
+      /* More than one order matched an email address, so let the customer pick
+         the parcel instead of guessing. Each row carries the tracking ID, which
+         also makes the ID visible to copy into the search box later. */
+      const renderList = (orders, query) => {
+        const host = document.querySelector('#track-result');
+        const rows = orders.map(order => {
+          const status = STEPS.find(step => step.key === order.status);
+          const items = (order.items || []).reduce((sum, item) => sum + item.qty, 0);
+          return `<button type="button" class="track-pick" data-track-ref="${escapeAttr(order.trackingId || order.id)}">
+              <span class="track-pick-main">
+                <strong>${escapeHtml(order.id)}</strong>
+                <em>${escapeHtml(order.city || '—')} · ${items} item${items === 1 ? '' : 's'} · ${money(Store.orderTotal(order))}</em>
+              </span>
+              <span class="track-pick-side">
+                <b>${escapeHtml(status ? status.label : (order.status || '—'))}</b>
+                <em>${escapeHtml(order.date || '')}</em>
+              </span>
+            </button>`;
+        }).join('');
+        host.innerHTML = `
+          <div class="track-empty"><p>We found ${orders.length} orders on <strong>${escapeHtml(query)}</strong>. Pick the one you want to track:</p></div>
+          <div class="track-picks">${rows}</div>
+          <p class="track-hint">If none of these look right, <a href="mailto:solids@studio.pk">email the studio</a> and we will check by hand.</p>`;
+        /* Clicking a row opens that order through the normal result view, so
+           there is only ever one rendering of an order on this page. */
+        host.querySelectorAll('.track-pick').forEach(button => {
+          button.addEventListener('click', () => {
+            showBusy();
+            findOrders(button.dataset.trackRef).then(matches => render(matches[0] || null));
+          });
+        });
+      };
+
+      /* Widen the input as the customer types a tracking ID, so the whole
+         reference is readable rather than scrolled off a narrow field. */
+      if (statusEl) {
+        statusEl.addEventListener('input', () => {
+          statusEl.size = Math.max(statusEl.size, Math.min(statusEl.value.length + 1, 36));
+        });
+      }
+
+      /* "Cancelled" is a valid status in the admin panel and on the server, but
+         it is not a rung on the ladder — it leaves the journey. Rendering it
+         through findIndex would leave every step "pending", so a cancelled
+         order needs its own message instead of a misleading empty ladder. */
+      const render = order => {
+        const host = document.querySelector('#track-result');
+        if (!order) {
+          host.innerHTML = `<div class="track-empty"><p>We could not find an order with that reference. Check the order number on your confirmation screen, or <a href="mailto:solids@studio.pk">email the studio</a> and we will look it up for you.</p></div>`;
+          return;
+        }
+
+        const cancelled = order.status === 'Cancelled';
+        const reached = STEPS.findIndex(step => step.key === order.status);
+        const steps = STEPS.map((step, index) => {
+          const state = reached < 0 ? 'pending' : index < reached ? 'done' : index === reached ? 'current' : 'pending';
+          return `<div class="track-step ${state}">
+            <span class="track-dot"></span>
+            <div class="track-step-body">
+              <strong>${escapeHtml(step.label)}</strong>
+              <span>${escapeHtml(step.note)}</span>
+            </div>
+          </div>`;
+        }).join('');
+
+        const quote = order.shipping || {};
+        /* Falls back for orders placed before the quote carried a label, so an
+           old receipt still reads as a plain delivery line. */
+        const chargeLabel = quote.label || 'Delivery charges';
+        const deliveryFee = quote.waived ? 'Free' : money(quote.baseFee != null ? quote.baseFee : (quote.delivery || 0));
+
+        const cancelNote = cancelled
+          ? `<div class="track-empty"><p><strong>This order was cancelled.</strong> Nothing further will be shipped and no payment is due. If you were charged, the studio will refund it — <a href="mailto:solids@studio.pk">email us</a> with the order number and we will sort it out.</p></div>`
+          : '';
+
+        host.innerHTML = `
+          <div class="track-meta">
+            <div><dt>Order</dt><dd>${escapeHtml(order.id)}</dd></div>
+            <div><dt>Tracking ID</dt><dd>${escapeHtml(order.trackingId || '—')}</dd></div>
+            <div><dt>Payment</dt><dd>${escapeHtml(order.payment)}</dd></div>
+            <div><dt>Deliver to</dt><dd>${escapeHtml(order.city || '—')}</dd></div>
+          </div>
+
+          ${cancelNote}
+          ${cancelled ? '' : `<div class="track-steps">${steps}</div>`}
+
+          <div class="track-items">
+            ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${escapeHtml(item.size || 'One size')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
+          </div>
+
+          <div class="track-items" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+            <div><span>Subtotal</span><em>${money(quote.subtotal || Store.orderTotal(order))}</em></div>
+            <div><span>${escapeHtml(chargeLabel)}</span><em>${deliveryFee}</em></div>
+            <div><span><strong>Total</strong></span><em><strong>${money(Store.orderTotal(order))}</strong></em></div>
+          </div>
+
+          <p class="track-hint">Questions about this order? Write to <a href="mailto:solids@studio.pk">solids@studio.pk</a> with your order number and we will pick it up from there.</p>`;
+      };
+
+      /* Pre-fill from ?id= so the confirmation screen's "Track this order"
+         button lands straight on the result. */
+      const params = new URLSearchParams(window.location.search);
+      const initial = params.get('id') || '';
+      const input = document.querySelector('#track-input');
+      if (initial) {
+        input.value = initial;
+        if (statusEl) statusEl.size = Math.min(initial.length + 1, 36);
+        search(initial);
+      }
+
+      document.querySelector('#track-form').addEventListener('submit', event => {
+        event.preventDefault();
+        search(input.value);
+      });
+    })();
+  </script>
+</body>
+</html>

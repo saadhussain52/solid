@@ -1,0 +1,15 @@
+{
+  "name": "solids-storefront",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Solids storefront with order tracking and optional email delivery.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check-email": "node check-email.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delivery &amp; payments | Solids Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="stylesheet" href="responsive.css">
+  <style>
+    /* Shipping settings cards */
+    .ship-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 22px;
+      align-items: start
+    }
+
+    .ship-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      padding: 24px
+    }
+
+    .ship-card h3 {
+      margin: 0 0 4px;
+      font: 17px 'Libre Baskerville', serif
+    }
+
+    .ship-card .muted {
+      margin: 0 0 20px;
+      font-size: 12px;
+      line-height: 1.6
+    }
+
+    .ship-fields {
+      display: grid;
+      gap: 15px
+    }
+
+    .ship-fields label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: .4px;
+      color: var(--muted)
+    }
+
+    .ship-fields input,
+    .ship-fields select,
+    .ship-fields textarea {
+      margin-top: 7px;
+      width: 100%
+    }
+
+    .ship-fields textarea {
+      min-height: 78px;
+      resize: vertical
+    }
+
+    .ship-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px
+    }
+
+    .ship-hint {
+      display: block;
+      margin-top: 6px;
+      font-size: 10.5px;
+      line-height: 1.5;
+      color: var(--muted);
+      opacity: .85;
+      text-transform: none;
+      letter-spacing: 0
+    }
+
+    .ship-cities {
+      width: 100%;
+      min-height: 120px;
+      margin-top: 7px
+    }
+
+    .ship-preview {
+      margin-top: 18px;
+      padding: 17px 18px;
+      background: #f7f5f3;
+      border: 1px solid var(--line)
+    }
+
+    .ship-preview p {
+      margin: 0 0 5px;
+      font-size: 9.5px;
+      letter-spacing: 1.1px;
+      text-transform: uppercase;
+      color: var(--muted)
+    }
+
+    .ship-preview table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      table-layout: fixed
+    }
+
+    .ship-preview td {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      word-break: break-word
+    }
+
+    /* The long "Cash on delivery — <city> (standard fee)" row header is a
+       single unbreakable token at 320px, which pushed the whole table past the
+       viewport. Let the first cell wrap and shrink. */
+    .ship-preview td:first-child {
+      min-width: 0;
+      padding-right: 10px
+    }
+
+    .ship-preview td:last-child {
+      text-align: right;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      width: 34%
+    }
+
+    .ship-preview tr:last-child td {
+      border-bottom: 0;
+      padding-top: 12px;
+      font-size: 13px
+    }
+
+    .ship-preview tr:last-child td:last-child {
+      font: 19px 'Libre Baskerville', serif
+    }
+
+    .ship-preview tr.is-free td:last-child {
+      color: #3f7d52
+    }
+
+    .ship-bar {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      margin-top: 26px;
+      padding: 16px 0 4px;
+      background: var(--paper);
+      border-top: 1px solid var(--line)
+    }
+
+    .ship-bar .ship-saved {
+      font-size: 11.5px;
+      color: #3f7d52;
+      margin-right: auto;
+      opacity: 0;
+      transition: opacity .2s
+    }
+
+    .ship-bar .ship-saved.show {
+      opacity: 1
+    }
+
+    @media(max-width:560px) {
+      .ship-row-2 {
+        grid-template-columns: 1fr
+      }
+
+      /* The card grid itself is `auto-fit minmax(300px, 1fr)`, which at a 320px
+         viewport still asks for 300px of column and pushes the page wider than
+         the screen. Let the columns shrink on the narrowest phones. */
+      .ship-grid {
+        grid-template-columns: minmax(0, 1fr)
+      }
+
+      .ship-card {
+        padding: 20px
+      }
+
+      .ship-bar {
+        flex-direction: column-reverse;
+        align-items: stretch
+      }
+
+      .ship-bar .button {
+        width: 100%
+      }
+
+      .ship-bar .ship-saved {
+        margin: 0;
+        text-align: center
+      }
+    }
+  </style>
+</head>
+
+<body class="admin-body admin-page">
+  <aside class="admin-sidebar">
+    <a class="wordmark admin-logo" href="admin.html" aria-label="Solids home"><img class="brand-logo"
+        src="solids-logo-transparent.png" alt="Solids"></a>
+    <p class="admin-label">WORKSPACE</p>
+    <nav>
+      <a class="admin-nav" href="admin.html">▦ <span>Overview</span></a>
+      <a class="admin-nav" href="products.html">◇ <span>Products &amp; inventory</span></a>
+      <a class="admin-nav" href="orders.html">□ <span>Orders</span></a>
+      <a class="admin-nav" href="categories.html">▧ <span>Categories &amp; banners</span></a>
+      <a class="admin-nav" href="customers.html">○ <span>Customers</span></a>
+      <a class="admin-nav active" href="shipping.html">✈ <span>Delivery &amp; payments</span></a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
+      <div class="admin-user">
+        <div class="avatar">SA</div>
+        <div><strong>Studio Admin</strong><small>solids@studio.pk</small></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div>
+        <p class="eyebrow">CHECKOUT SETTINGS</p>
+        <h1>Delivery &amp; payments</h1>
+      </div>
+      <div class="admin-top-actions">
+        <a class="button button-dark" href="index.html" target="_blank" rel="noopener">View storefront ↗</a>
+        <div class="admin-avatar">SA</div>
+      </div>
+    </header>
+
+    <section class="admin-content admin-page-content">
+      <div class="page-heading">
+        <div>
+          <h2>Delivery &amp; payments</h2>
+          <p class="muted">These figures drive the checkout directly — the delivery charge a customer sees, the bank
+            details they copy, and the payment options offered. Changes save instantly and apply to the next order.</p>
+        </div>
+      </div>
+
+      <form id="shipping-form">
+        <div class="ship-grid">
+          <div class="ship-card">
+            <h3>Delivery &amp; shipping charges</h3>
+            <p class="muted">Two tiers, picked by the customer's city at checkout. Own-route cities pay the delivery
+              charge; every other city in Pakistan pays the shipping charge.</p>
+            <div class="ship-fields">
+              <!-- step="any" on purpose: a step of 50 made the browser reject any other
+                   amount (typing 275 blocked the whole form from saving), so
+                   the admin could not set an arbitrary figure. -->
+              <label>Delivery charge — Islamabad &amp; Rawalpindi (Rs.)
+                <input id="sf-deliveryFee" type="number" min="0" step="any" required>
+                <span class="ship-hint">Shown as “Delivery charges”.</span>
+              </label>
+              <label>Free delivery over (Rs.)
+                <input id="sf-freeDeliveryOver" type="number" min="0" step="any" required>
+                <span class="ship-hint" id="sf-freeOver-hint">Own-route orders above this basket value get free
+                  delivery. Set to 0 to always charge delivery.</span>
+              </label>
+              <label>Shipping charge — all other cities (Rs.)
+                <input id="sf-shippingFee" type="number" min="0" step="any" required>
+                <span class="ship-hint">Shown as “Shipping charges”.</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="ship-card">
+            <h3>Bank account details</h3>
+            <p class="muted">Revealed to the customer when they choose bank transfer.</p>
+            <div class="ship-fields">
+              <label>Bank name<input id="sf-bankName" type="text"></label>
+              <div class="ship-row-2">
+                <label>Account title<input id="sf-accountTitle" type="text"></label>
+                <label>Account number<input id="sf-accountNumber" type="text"></label>
+              </div>
+              <label>IBAN<input id="sf-iban" type="text"></label>
+              <div class="ship-row-2">
+                <label>Bank code<input id="sf-bankCode" type="text"></label>
+                <label>Branch<input id="sf-branch" type="text"></label>
+              </div>
+              <label>Instructions<textarea id="sf-instructions"></textarea></label>
+            </div>
+          </div>
+
+          <div class="ship-card">
+            <h3>Contact &amp; cities</h3>
+            <p class="muted">Where customers reach you, and which cities get which charge.</p>
+            <div class="ship-fields">
+              <div class="ship-row-2">
+                <label>Support email<input id="sf-supportEmail" type="email"></label>
+                <label>Support phone<input id="sf-supportPhone" type="tel"></label>
+              </div>
+              <label>Own-route cities (one per line)
+                <textarea id="sf-localCities" class="ship-cities"></textarea>
+                <span class="ship-hint" id="sf-localCities-hint">These cities are charged the delivery charge. Every
+                  other city in Pakistan pays the shipping charge.</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="ship-preview">
+          <p>LIVE PREVIEW</p>
+          <table>
+            <tbody id="ship-preview-rows"></tbody>
+          </table>
+        </div>
+
+        <div class="ship-bar">
+          <span class="ship-saved" id="ship-saved">Saved — the storefront is using these figures.</span>
+          <button class="button" type="button" id="ship-reset">Revert to defaults</button>
+          <button class="button button-dark" type="submit">Save changes ↗</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="store-data.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const { money } = Store;
+
+      /* Every field maps to a key on Store.state.shipping, so saving is a
+         straight read of the form plus one call. */
+      const NUMERIC = ['deliveryFee', 'freeDeliveryOver', 'shippingFee'];
+      const BANK = ['bankName', 'accountTitle', 'accountNumber', 'iban', 'bankCode', 'branch', 'instructions'];
+      const FIELDS = NUMERIC.concat(BANK, ['supportEmail', 'supportPhone']);
+
+      const fill = config => {
+        /* Older saved configs predate some of these keys, and assigning
+           `undefined` to a number input logs a parse warning, so fall back to
+           the stored default rather than writing a blank. */
+        NUMERIC.forEach(key => {
+          const el = document.querySelector('#sf-' + key);
+          const value = Number(config[key]);
+          el.value = Number.isFinite(value) ? value : 0;
+        });
+        BANK.forEach(key => { document.querySelector('#sf-' + key).value = config.bankDetails[key] || ''; });
+        document.querySelector('#sf-supportEmail').value = config.supportEmail || '';
+        document.querySelector('#sf-supportPhone').value = config.supportPhone || '';
+        document.querySelector('#sf-localCities').value = (config.localCities || []).join('\n');
+        paintHints(config);
+        preview();
+      };
+
+      /* Wording that names the own-route cities follows whatever the admin
+         has typed, so the card never claims a city that is no longer listed. */
+      const cityList = config => (config.localCities || []).join(', ') || 'the own-route cities';
+
+      const paintHints = config => {
+        const cities = cityList(config);
+        const localHint = document.querySelector('#sf-localCities-hint');
+        if (localHint) {
+          localHint.textContent = `Charged the delivery charge (${cities}). Every other city in Pakistan pays the shipping charge.`;
+        }
+        const overHint = document.querySelector('#sf-freeOver-hint');
+        if (overHint) {
+          overHint.textContent = config.freeDeliveryOver > 0
+            ? `Orders from ${cities} above this basket value get free delivery.`
+            : 'Set to 0 to always charge delivery.';
+        }
+      };
+
+      /* Quote the live Store so the preview shows exactly what a customer
+         would be charged — same function the checkout calls. The sample
+         basket sits below the threshold, so the free-delivery row is only
+         meaningful once the admin raises the amount. */
+      const preview = () => {
+        const config = Store.state.shipping;
+        const local = (config.localCities || [])[0] || 'Islamabad';
+        const other = (Store.PK_CITIES || []).find(city =>
+          !(config.localCities || []).includes(city)) || 'Lahore';
+        const rows = [];
+
+        /* One scenario = one city at one basket value. */
+        const scenario = (title, city, subtotal) => {
+          const q = Store.shippingQuote({ subtotal, city });
+          const lines = [
+            { label: `Subtotal (sample ${money(subtotal)} basket)`, value: money(subtotal) },
+            { label: q.label + (city ? ' to ' + city : ''), value: q.waived ? 'Free' : money(q.baseFee) }
+          ];
+          rows.push(`<tr><td colspan="2" style="padding-top:14px;color:#292827"><strong>${title}</strong></td></tr>`);
+          lines.forEach(line => rows.push(
+            `<tr${line.value === 'Free' ? ' class="is-free"' : ''}><td>${line.label}</td><td>${line.value}</td></tr>`));
+          rows.push(`<tr><td><strong>Total</strong></td><td>${money(q.total)}</td></tr>`);
+        };
+
+        /* Below the threshold: own-route still pays the delivery charge. */
+        const threshold = config.freeDeliveryOver;
+        const under = threshold > 0 ? Math.max(0, threshold - 1) : 5000;
+        scenario(`Own-route — ${local}`, local, under);
+        if (threshold > 0) {
+          /* At the threshold: the same city becomes free, which is the whole
+             point of the setting, so show it side by side. */
+          scenario(`Own-route — ${local}, free over ${money(threshold)}`, local, threshold);
+        }
+        /* Another city: same basket, different tier. */
+        scenario(`Other city — ${other}`, other, under);
+        if (threshold > 0) {
+          /* Proves the free delivery does not leak into shipping. */
+          scenario(`Other city — ${other}, free over ${money(threshold)}`, other, threshold);
+        }
+
+        document.querySelector('#ship-preview-rows').innerHTML = rows.join('');
+      };
+
+      /* Keep the preview honest while typing, without saving. The city lists are
+         read too, so adding a city re-routes its preview immediately. */
+      const liveConfig = () => {
+        const config = JSON.parse(JSON.stringify(Store.state.shipping));
+        NUMERIC.forEach(k => { config[k] = Number(document.querySelector('#sf-' + k).value) || 0; });
+        const lines = id => document.querySelector('#sf-' + id).value
+          .split('\n').map(line => line.trim()).filter(Boolean);
+        config.localCities = lines('localCities');
+        return config;
+      };
+
+      FIELDS.concat(['localCities']).forEach(key => {
+        const el = document.querySelector('#sf-' + key);
+        if (el) el.addEventListener('input', () => {
+          const config = liveConfig();
+          Store.state.shipping = config;
+          paintHints(config);
+          preview();
+        });
+      });
+
+      document.querySelector('#shipping-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const config = JSON.parse(JSON.stringify(Store.state.shipping));
+        NUMERIC.forEach(key => { config[key] = Math.max(0, Number(document.querySelector('#sf-' + key).value) || 0); });
+        BANK.forEach(key => { config.bankDetails[key] = document.querySelector('#sf-' + key).value.trim(); });
+        config.supportEmail = document.querySelector('#sf-supportEmail').value.trim();
+        config.supportPhone = document.querySelector('#sf-supportPhone').value.trim();
+        config.localCities = document.querySelector('#sf-localCities').value
+          .split('\n').map(line => line.trim()).filter(Boolean);
+
+        Store.saveShipping(config);
+        fill(Store.state.shipping);
+        const saved = document.querySelector('#ship-saved');
+        saved.classList.add('show');
+        setTimeout(() => saved.classList.remove('show'), 2600);
+      });
+
+      document.querySelector('#ship-reset').addEventListener('click', () => {
+        if (!confirm('Revert delivery fees, bank details and cities to the defaults?')) return;
+        Store.saveShipping({});
+        fill(Store.state.shipping);
+      });
+
+      fill(Store.state.shipping);
+    })();
+  </script>
+</body>
+
+</html>

@@ -897,6 +897,549 @@
   padding: 36px
 }
 
+/* ==================================================================
+ * 5. Checkout — Pakistan COD / bank transfer
+
+   workspace.css caps every `.store-modal-card` at 520px, which is the right
+   width for the sign-in box but far too narrow for a checkout with a form and
+   an order summary side by side. These rules widen the card, lay the two
+   columns out, and build the summary, payment picker, bank panel and
+   confirmation screen. Mobile collapses back to a single column.
+   ================================================================== */
+
+.store-modal.checkout-modal {
+  padding: 24px
+}
+
+.store-modal.checkout-modal .checkout-card {
+  width: min(940px, 100%);
+  max-width: 940px;
+  padding: 0;
+  overflow: hidden
+}
+
+.checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  align-items: start;
+  max-height: 92vh
+}
+
+.checkout-main {
+  padding: 34px 34px 30px;
+  min-width: 0;
+  overflow-y: auto;
+  max-height: 92vh
+}
+
+.checkout-main h3 {
+  margin-bottom: 22px
+}
+
+.checkout-aside {
+  background: #f7f5f3;
+  border-left: 1px solid var(--line);
+  padding: 34px 30px;
+  min-width: 0;
+  max-height: 92vh;
+  overflow-y: auto
+}
+
+.checkout-aside .eyebrow {
+  margin-bottom: 16px
+}
+
+/* --- fields --- */
+
+.co-field {
+  display: block;
+  margin-bottom: 15px
+}
+
+.store-modal-card .co-field {
+  font-size: 11px;
+  letter-spacing: .4px;
+  color: var(--muted)
+}
+
+.store-modal-card .co-field input,
+.store-modal-card .co-field select,
+.store-modal-card .co-field textarea {
+  margin-top: 7px
+}
+
+.co-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  opacity: .85
+}
+
+.co-optional {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  opacity: .7
+}
+
+/* --- payment method picker --- */
+
+.co-methods {
+  border: 0;
+  padding: 0;
+  margin: 22px 0 0;
+  display: grid;
+  gap: 10px
+}
+
+.store-modal-card .co-methods legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: 11px;
+  letter-spacing: .4px;
+  color: var(--muted)
+}
+
+.store-modal-card .co-method {
+  margin: 0;
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: border-color .18s, background .18s
+}
+
+.store-modal-card .co-method:hover {
+  border-color: #c9c2b8;
+  background: #fff
+}
+
+.store-modal.card-checked .co-method,
+.co-method:has(input:checked) {
+  border-color: var(--ink);
+  background: #fff
+}
+
+/* Grid, not flex: as a flex child the text block was free to shrink to
+   nothing, which squeezed it into a ~40px column at the far edge of the card.
+   Two explicit columns pin the radio and give the copy every remaining pixel. */
+.store-modal-card .co-method {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 11px
+}
+
+.store-modal-card .co-method input[type="radio"] {
+  margin: 2px 0 0;
+  accent-color: var(--ink)
+}
+
+.store-modal-card .co-method-body {
+  display: block;
+  width: 100%;
+  min-width: 0
+}
+
+.store-modal-card .co-method-body strong {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--ink)
+}
+
+.co-method-blurb {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted)
+}
+
+/* --- bank details panel --- */
+
+.co-bank {
+  margin-top: 14px;
+  padding: 17px 18px;
+  background: #fbfaf9;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--ink)
+}
+
+.co-bank-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: .3px;
+  color: var(--ink)
+}
+
+.co-bank-note {
+  margin: 0 0 13px;
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted)
+}
+
+.co-bank-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px 16px;
+  margin: 0
+}
+
+.co-bank-grid div {
+  min-width: 0
+}
+
+.co-bank-grid dt {
+  margin: 0;
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: .8
+}
+
+.co-bank-grid dd {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  word-break: break-word;
+  font-variant-numeric: tabular-nums
+}
+
+/* --- order summary --- */
+
+.co-summary-count {
+  margin: 0 0 13px;
+  font-size: 11px;
+  letter-spacing: .4px;
+  color: var(--muted)
+}
+
+.co-lines {
+  display: grid;
+  gap: 13px
+}
+
+.co-line {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: start
+}
+
+.co-line img {
+  width: 46px;
+  height: 58px;
+  object-fit: cover;
+  background: #ece9e5
+}
+
+.co-line strong {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink);
+  letter-spacing: 0
+}
+
+.co-line span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted)
+}
+
+.co-line em {
+  font-style: normal;
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums
+}
+
+.co-charges {
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px
+}
+
+.co-charge {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--muted)
+}
+
+.co-charge em {
+  font-style: normal;
+  color: var(--ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums
+}
+
+.co-charge.is-free em {
+  color: #3f7d52
+}
+
+.co-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-top: 5px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--ink)
+}
+
+.co-total strong {
+  font: 20px 'Libre Baskerville', serif;
+  font-variant-numeric: tabular-nums
+}
+
+.co-delivery-note {
+  margin: 12px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted)
+}
+
+/* --- confirmation --- */
+
+.store-modal .confirm-card {
+  width: min(560px, 100%);
+  max-width: 560px;
+  padding: 34px
+}
+
+.confirm-sub {
+  margin: 0 0 20px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  letter-spacing: 0;
+  color: var(--muted)
+}
+
+.confirm-track {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 15px 16px;
+  background: var(--ink);
+  color: #fff
+}
+
+.confirm-track div {
+  min-width: 0
+}
+
+.confirm-track span {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  opacity: .7
+}
+
+.confirm-track strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 14px;
+  letter-spacing: .4px;
+  word-break: break-all;
+  font-variant-numeric: tabular-nums
+}
+
+.confirm-track-note {
+  margin: 9px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  color: var(--muted)
+}
+
+/* Copy/save pair: this site cannot email a receipt, so the customer keeps
+   their own copy of the order number here. */
+.confirm-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0
+}
+
+.confirm-actions .button {
+  width: 100%
+}
+
+/* Shown only when the clipboard is blocked, so the text can be selected
+   and copied by hand. */
+.confirm-plain {
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.6;
+  resize: vertical
+}
+
+.confirm-send {
+  display: inline-block;
+  width: 100%;
+  margin-top: 13px
+}
+
+/* The tracking link is the one thing a customer must be able to save. Email
+   may not arrive, and they may open the site on another device, so the URL
+   itself is shown in full — selectable, wrapping across lines, never
+   truncated by a width limit. */
+.confirm-link {
+  margin-top: 20px;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  background: #fbfaf7
+}
+
+.confirm-link-url {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--ink);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  user-select: all;
+  -webkit-user-select: all
+}
+
+.confirm-items {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px
+}
+
+.confirm-items div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11.5px;
+  letter-spacing: 0;
+  color: var(--muted)
+}
+
+.confirm-items em {
+  font-style: normal;
+  color: var(--ink);
+  white-space: nowrap
+}
+
+.confirm-block {
+  margin-top: 20px;
+  padding: 17px 18px;
+  background: #fbfaf9;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--ink)
+}
+
+.confirm-block .eyebrow {
+  margin-bottom: 7px
+}
+
+.confirm-note {
+  margin: 0 0 13px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  letter-spacing: 0;
+  color: var(--muted)
+}
+
+/* --- checkout on phones: single column, summary below the form --- */
+
+@media(max-width:760px) {
+  .store-modal.checkout-modal {
+    padding: 0
+  }
+
+  .store-modal.checkout-modal .checkout-card {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0
+  }
+
+  .checkout-layout {
+    display: flex;
+    flex-direction: column;
+    max-height: 100vh
+  }
+
+  .checkout-main,
+  .checkout-aside {
+    max-height: none;
+    overflow: visible;
+    padding: 22px 18px
+  }
+
+  .checkout-aside {
+    order: 2;
+    border-left: 0;
+    border-top: 1px solid var(--line)
+  }
+
+  .checkout-main {
+    order: 1
+  }
+
+  /* Sticky confirm button: the total is always one thumb-tap away, however
+     long the form gets. */
+  .checkout-main .modal-actions {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    gap: 10px;
+    padding: 12px 0 2px;
+    margin-top: 4px;
+    background: var(--paper);
+    border-top: 1px solid var(--line)
+  }
+
+  .checkout-main .modal-actions .button {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11px
+  }
+
+  .co-bank-grid,
+  .confirm-track {
+    grid-template-columns: minmax(0, 1fr)
+  }
+}
+
 .store-modal-card h3 {
   font: 24px 'Libre Baskerville', serif;
   margin: 0 0 20px
@@ -925,6 +1468,21 @@
 
 .store-modal-card textarea {
   resize: vertical
+}
+
+/* The generic field rule above is written for text inputs, so it turns a
+   radio button into a full-width block. Reset the radio inside the payment
+   picker back to a real, tappable circle. */
+.store-modal-card .co-method input[type="radio"] {
+  display: inline-block;
+  width: auto;
+  padding: 0;
+  margin: 3px 0 0;
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  accent-color: var(--ink);
+  cursor: pointer
 }
 
 .store-modal .modal-actions {

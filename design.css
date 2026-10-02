@@ -58,6 +58,95 @@ body{
 
 .desktop-nav{letter-spacing:.4px}
 
+/* catalog.css carries these nav rules, but index.html does not load that
+   sheet — so the home header rendered in DM Sans while the shop pages
+   rendered in Libre Baskerville. Restate them here (last stylesheet) so
+   every page's header matches. */
+.site-header .desktop-nav{
+  font-family:'Libre Baskerville',serif;
+  text-transform:uppercase;
+  font-size:11px;
+  gap:34px
+}
+.site-header .desktop-nav a.active{
+  border-bottom:1px solid #292827;
+  padding-bottom:4px
+}
+
+/* the delivery banner belongs on every page, the home page included */
+.home-body>.announcement{display:block}
+
+/* On narrow phones the nav links plus the Search/Bag actions do not fit on
+   one row at the desktop gap. design.css loads after responsive.css, so the
+   shrink has to live here or this `gap:34px` would win at every width. */
+@media(max-width:420px) {
+  .site-header .desktop-nav,
+  .catalog-header .desktop-nav {
+    gap: 13px
+  }
+}
+
+@media(max-width:360px) {
+  .site-header .desktop-nav,
+  .catalog-header .desktop-nav {
+    gap: 10px
+  }
+}
+
+/* collections dropdown in the header */
+.nav-dropdown{position:relative;list-style:none;display:flex;align-items:center}
+/* match the sibling nav links exactly, or the caret drags the baseline */
+.nav-dropdown>a{display:block;line-height:inherit}
+.nav-dropdown>a[aria-expanded=true]{border-bottom:1px solid #292827;padding-bottom:4px}
+/* Libre Baskerville has no ▾ glyph — it renders as a stray dot. Draw the
+   caret with borders instead so it is identical in every font. */
+.nav-caret{
+  display:inline-block;
+  width:0;
+  height:0;
+  margin-left:5px;
+  vertical-align:middle;
+  border-left:3.5px solid transparent;
+  border-right:3.5px solid transparent;
+  border-top:4px solid currentColor;
+  opacity:.55;
+  transition:transform .25s
+}
+.nav-dropdown.open .nav-caret{transform:rotate(180deg)}
+.nav-dropdown-menu{
+  position:absolute;
+  top:100%;
+  left:-14px;
+  min-width:210px;
+  background:#fff;
+  border:1px solid var(--hairline);
+  box-shadow:0 12px 34px rgba(41,40,39,.12);
+  padding:8px 0;
+  display:none;
+  z-index:60
+}
+.nav-dropdown.open .nav-dropdown-menu{display:block}
+.nav-dropdown-menu a{
+  display:block;
+  padding:9px 18px;
+  font-size:11px;
+  color:#6f6a64;
+  text-transform:none;
+  letter-spacing:.2px;
+  white-space:nowrap;
+  border:0
+}
+.nav-dropdown-menu a:hover{background:#f7f5f3;color:#292827}
+/* Touch-target sizing for the menu rows lives in responsive.css, inside its
+   header block, where the phone header is already handled. */
+.nav-dropdown-menu .nav-dropdown-all{
+  color:#292827;
+  font-weight:700;
+  border-bottom:1px solid var(--hairline);
+  margin-bottom:6px;
+  padding-bottom:12px
+}
+
 .header-link,
 .cart-trigger{letter-spacing:.4px}
 

@@ -15,6 +15,9 @@
     content: 'solids-store-content',
     orders: 'solids-store-orders',
     users: 'solids-store-users',
+    shipping: 'solids-store-shipping',
+    /* Bumped when the saved shipping shape changes, so an older config in
+       someone's browser gets normalised instead of silently read wrong. */
     version: 'solids-store-version'
   };
 
@@ -28,8 +31,51 @@
   var DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
   var DEFAULT_COLORS = ['Bone', 'Black', 'Olive'];
 
+  /* --------------------------------------------------- shipping & payments */
+
+  /* Everything the checkout needs about delivery and payment. Admin can edit
+     every figure here from the Studio dashboard; the storefront only ever
+     reads it, so a change shows up on the next checkout without a deploy. */
+  var DEFAULT_SHIPPING = {
+    /* Charge for the cities on the studio's own route (see localCities).
+       Shown to those customers as "Delivery charges". */
+    deliveryFee: 150,
+    /* Waive the delivery charge for own-route cities once the basket reaches
+       this amount (0 = never waived). This is the figure an admin raises or
+       lowers from the Delivery & payments panel. */
+    freeDeliveryOver: 10000,
+    /* Flat courier charge for every other city in Pakistan. Shown to those
+       customers as "Shipping charges", separate from the delivery figure. */
+    shippingFee: 250,
+    /* Own-route cities: charged the delivery figure, not the shipping one.
+       These two are the studio's own route. */
+    localCities: ['Islamabad', 'Rawalpindi'],
+    bankDetails: {
+      title: 'Bank transfer details',
+      bankName: 'Meezan Bank',
+      accountTitle: 'Solids Studio (Pvt) Ltd',
+      accountNumber: '0102-0107-4500-01',
+      iban: 'PK36MEZN0001020107450001',
+      bankCode: 'MEZN',
+      branch: 'Gulberg III, Lahore',
+      instructions: 'Send the transfer receipt to this email. We dispatch as soon as the amount reflects.'
+    },
+    supportEmail: 'solids@studio.pk',
+    supportPhone: '+92 300 0000000'
+  };
+
+  var PK_CITIES = [
+    'Lahore', 'Karachi', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan',
+    'Peshawar', 'Quetta', 'Sialkot', 'Gujranwala', 'Hyderabad', 'Sahiwal',
+    'Abbottabad', 'Bahawalpur', 'Sargodha', 'Larkana', 'Sukkur', 'Gilgit',
+    'Skardu', 'Gwadar', 'Turbat', 'Zhob', 'Chaman', 'Mingora', 'Nawabshah',
+    'Rahim Yar Khan', 'Khanpur', 'Dera Ghazi Khan', 'Turbat', 'Nowshera',
+    'Attock', 'Jhelum', 'Chiniot', 'Kamoke', 'Gujrat', 'Mandi Bahauddin',
+    'Bhakkar', 'Layyah', 'Muzaffargarh', 'Khanewal', 'Okara', 'Kasur'
+  ];
+
   var DEFAULT_CONTENT = {
-    announcement: 'COMPLIMENTARY DELIVERY ON ORDERS ABOVE RS. 10,000 • 4–7 WORKING DAYS',
+    announcement: 'FREE DELIVERY IN ISLAMABAD & RAWALPINDI ON ORDERS ABOVE RS. 10,000 • 4–7 WORKING DAYS',
     heroEyebrow: 'THE AUTUMN EDIT / 26',
     heroTitle: 'Less, but better.',
     heroSubline: 'Quiet silhouettes, tactile layers, and a palette that lets you be the statement.',
@@ -56,7 +102,9 @@
     shirt: 'https://images.unsplash.com/photo-1605763240000-7e93b172d754?auto=format&fit=crop&w=900&q=85',
     tee: 'https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?auto=format&fit=crop&w=900&q=85',
     tank: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=900&q=85',
-    wideLeg: 'https://images.unsplash.com/photo-1506629905607-d9f297d3e0e9?auto=format&fit=crop&w=900&q=85',
+    /* Was photo-1506629905607-d9f297d3e0e9, which Unsplash now 404s — every
+       wide-leg product rendered a broken image. Verified live: this one loads. */
+    wideLeg: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&w=900&q=85',
     hero: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=2000&q=85',
     banner: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1600&q=85',
     fallback: 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=85'
@@ -264,8 +312,36 @@
     banners: read(KEYS.banners, DEFAULT_BANNERS),
     content: Object.assign({}, DEFAULT_CONTENT, read(KEYS.content, DEFAULT_CONTENT)),
     orders: read(KEYS.orders, DEFAULT_ORDERS),
-    users: read(KEYS.users, DEFAULT_USERS)
+    users: read(KEYS.users, DEFAULT_USERS),
+    shipping: normalizeShipping(read(KEYS.shipping, DEFAULT_SHIPPING))
   };
+
+  function normalizeShipping(config) {
+    var saved = config || {};
+    var base = Object.assign({}, DEFAULT_SHIPPING, saved);
+    base.bankDetails = Object.assign({}, DEFAULT_SHIPPING.bankDetails, saved.bankDetails);
+    /* Older saves listed the own-route cities under freeCities, back when they
+       cost nothing to deliver. Only adopt that list when the save genuinely
+       has no localCities — otherwise an admin's own-route city (say Attock)
+       would silently fall back to the shipping tier and start being
+       charged the courier rate. */
+    if (!Array.isArray(saved.localCities) && Array.isArray(saved.freeCities)) {
+      base.localCities = saved.freeCities;
+    }
+    ['deliveryFee', 'freeDeliveryOver', 'shippingFee']
+      .forEach(function (key) { base[key] = Math.max(0, num(base[key])); });
+    /* Payment-method fees are no longer charged, so drop the stale keys
+       instead of leaving them to accumulate in saved config. */
+    delete base.codFee;
+    delete base.bankFee;
+    delete base.codDiscount;
+    delete base.codDiscountOver;
+    delete base.freeCities;
+    /* There is no remote-area surcharge any more — only the two tiers. */
+    delete base.remoteFee;
+    delete base.remoteCities;
+    return base;
+  }
 
   function save(part) {
     if (part && state[part]) write(KEYS[part], state[part]);
@@ -498,10 +574,16 @@
       email: details.email || '',
       phone: details.phone || '',
       address: details.address || '',
+      city: details.city || '',
+      notes: details.notes || '',
+      trackingId: details.trackingId || makeTrackingId(),
       date: 'Today, just now',
       items: details.items || [],
       status: details.status || 'Paid',
-      payment: details.payment || 'Cash on delivery'
+      payment: details.payment || 'Cash on delivery',
+      /* Frozen at checkout time so a later admin fee change never rewrites
+         what an existing customer agreed to pay. */
+      shipping: details.shipping || null
     };
     state.orders.unshift(order);
     save('orders');
@@ -510,6 +592,8 @@
     var email = (details.email || '').toLowerCase();
     if (email) {
       var existing = state.users.filter(function (user) { return String(user.email).toLowerCase() === email; })[0];
+      /* Customer spend is goods only — delivery is what we pay, not what they
+         earned us, so it stays out of the lifetime-value figure. */
       var spend = order.items.reduce(function (sum, item) { return sum + (num(item.price) * num(item.qty, 1)); }, 0);
       if (existing) {
         existing.orders += 1;
@@ -538,10 +622,97 @@
     return order;
   }
 
+  /* Merge an order that the server is holding but this browser has not seen —
+     this is what makes the emailed tracking link work when it is opened on a
+     different device. Matched on the order number, which is the reference the
+     customer pasted, and the server's copy wins field by field so a status
+     change made in the studio is what the customer sees. */
+  function adoptOrder(incoming) {
+    if (!incoming || !incoming.id) return null;
+    var needle = String(incoming.id).trim().toLowerCase().replace(/^#/, '');
+    var index = state.orders.map(function (order) {
+      return String(order.id || '').trim().toLowerCase().replace(/^#/, '');
+    }).indexOf(needle);
+    if (index === -1) {
+      state.orders.unshift(JSON.parse(JSON.stringify(incoming)));
+    } else {
+      state.orders[index] = Object.assign({}, state.orders[index], incoming);
+    }
+    save('orders');
+    return state.orders[index === -1 ? 0 : index];
+  }
+
+  /* ------------------------------------------------------------- shipping */
+
+  /* Single source of truth for what an order costs to deliver. Both the
+     checkout summary and the admin preview call this, so the figure the
+     customer sees is the figure that gets stored on the order.
+
+     Two tiers, and the label is part of the quote so every screen agrees:
+     own-route cities (Islamabad, Rawalpindi) are charged the delivery fee,
+     every other city in Pakistan is charged the shipping fee. Own-route
+     orders above the admin-set threshold get delivery free. */
+  function shippingQuote(options) {
+    var opts = options || {};
+    var config = state.shipping;
+    var subtotal = Math.max(0, num(opts.subtotal));
+    var city = String(opts.city || '');
+    var matches = function (name) {
+      return String(name).trim().toLowerCase() === city.trim().toLowerCase();
+    };
+    /* Islamabad and Rawalpindi sit on the studio's own route, so they are
+       billed the delivery figure. Every other city in Pakistan ships by
+       courier and is billed the shipping figure. */
+    var isLocal = !!city && config.localCities.some(matches);
+
+    var label = isLocal ? 'Delivery charges' : 'Shipping charges';
+    var baseFee = isLocal ? config.deliveryFee : config.shippingFee;
+
+    /* The free-delivery threshold only ever applied to own-route cities —
+       free to hand over in Lahore is a real cost, so it does not extend. */
+    var waived = isLocal && config.freeDeliveryOver > 0 && subtotal >= config.freeDeliveryOver;
+    var delivery = waived ? 0 : baseFee;
+
+    var total = subtotal + delivery;
+    return {
+      subtotal: subtotal,
+      delivery: delivery,
+      /* The two figures, kept apart so a receipt or the admin can show which
+         tier this order was billed on. */
+      deliveryFee: config.deliveryFee,
+      shippingFee: config.shippingFee,
+      label: label,
+      baseFee: baseFee,
+      freeOver: config.freeDeliveryOver,
+      waived: waived,
+      isLocalCity: isLocal,
+      total: Math.max(0, total)
+    };
+  }
+
+  /* Human tracking reference the customer quotes over email or the phone. */
+  function makeTrackingId() {
+    var stamp = Date.now().toString(36).toUpperCase().slice(-5);
+    var rand = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    return 'SLD' + stamp + rand;
+  }
+
+  function saveShipping(config) {
+    state.shipping = normalizeShipping(Object.assign({}, state.shipping, config || {}));
+    write(KEYS.shipping, state.shipping);
+    return state.shipping;
+  }
+
   function orderTotal(order) {
-    return (order.items || []).reduce(function (sum, item) {
+    var goods = (order.items || []).reduce(function (sum, item) {
       return sum + num(item.price) * num(item.qty, 1);
     }, 0);
+    var shipping = (order && order.shipping) || {};
+    /* delivery is the full charge for this order's tier — a waived order stores
+       0 — so nothing is added on top here. Orders placed before this shape
+       still carry the older methodFee/discount keys, which num() reads as 0. */
+    var extra = num(shipping.delivery);
+    return goods + Math.max(0, extra);
   }
 
   /* ------------------------------------------------------------ analytics */
@@ -598,10 +769,54 @@
     state.content = JSON.parse(JSON.stringify(DEFAULT_CONTENT));
     state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
     state.users = JSON.parse(JSON.stringify(DEFAULT_USERS));
+    state.shipping = normalizeShipping(DEFAULT_SHIPPING);
     save();
   }
 
-  /* ------------------------------------------------------------------ api */
+  /* ------------------------------------------------------------------- api */
+
+  /* The storefront is static HTML, so the order API is optional rather than
+     required. Everything here resolves either way: if server.js is not
+     running, callers fall back to this browser's own copy so a customer can
+     still check out on a plain file:// page or a static host. */
+  var api = {
+    /* True once a request to the API has actually succeeded, so the
+       confirmation screen can be honest about whether mail was sent. */
+    online: false,
+
+    /* POST an order. Resolves { ok, order, emailSent, trackUrl }; `order` is
+       the server's copy when it answered, otherwise the caller's local one. */
+    create: function (payload) {
+      return fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error('API ' + response.status);
+          return response.json();
+        })
+        .then(function (data) {
+          api.online = true;
+          return data;
+        });
+    },
+
+    /* GET an order by tracking ID, order number, or the customer's email. */
+    lookup: function (reference) {
+      return fetch('/api/orders/' + encodeURIComponent(reference))
+        .then(function (response) {
+          /* A genuine "no such order" is an answer, not a failure. */
+          if (response.status === 404) return { ok: false, order: null };
+          if (!response.ok) throw new Error('API ' + response.status);
+          return response.json();
+        })
+        .then(function (data) {
+          api.online = true;
+          return data;
+        });
+    }
+  };
 
   global.Store = {
     KEYS: KEYS,
@@ -642,8 +857,14 @@
     setOrderStatus: setOrderStatus,
     setUserStatus: setUserStatus,
     createOrder: createOrder,
+    adoptOrder: adoptOrder,
     orderTotal: orderTotal,
     analytics: analytics,
+    shippingQuote: shippingQuote,
+    saveShipping: saveShipping,
+    makeTrackingId: makeTrackingId,
+    api: api,
+    PK_CITIES: PK_CITIES,
     resetAll: resetAll
   };
 

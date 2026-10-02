@@ -724,9 +724,26 @@
   min-height: 84px
 }
 
+/* catalog.css sets .catalog-header{height:72px} and premium.css sets
+   .home-body .site-header{height:100px}; both are needed in this 3-column
+   layout, so re-state them here (this file loads last).
+   The home header is deliberately the SAME height as every other page: the
+   old 100px-vs-84px split made the bar visibly jump the moment you navigated
+   from the storefront to the shop, and again below 400px where the phone
+   rules collapsed both to auto.
+
+   NOTE: this rule is un-media'd, so it also wins over the phone block further
+   down unless that block re-states `height:auto`. The `.brand-logo` entries
+   here are what pin the logo's box on every page — the later
+   `.site-header .brand-logo` rules only need to change its height.
+
+   `.brand-logo` is deliberately NOT in this list: pinning the logo to the
+   header height would fight the clamp further down and make the wordmark a
+   different size on the home page than on the shop. */
+.catalog-header,
 .home-body .site-header {
-  height: 100px;
-  min-height: 100px
+  height: 84px;
+  min-height: 84px
 }
 
 .site-header .desktop-nav,
@@ -750,17 +767,37 @@
   align-items: center
 }
 
+.site-header .wordmark .brand-logo {
+  flex: 0 0 auto;
+  align-self: center
+}
+
 /* premium.css pins the logo to 190x66 which renders tiny on narrow screens ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
-   drive it from the available height instead. */
+   drive it from the available height instead. `flex: 0 0 auto` keeps the logo
+   at its true aspect ratio — as a flex child it would otherwise be stretched
+   by the wordmark box and change the header height as the nav wraps. */
 .site-header .brand-logo,
 .home-body .brand-logo,
 .catalog-header .brand-logo {
   display: block;
+  flex: 0 0 auto;
   width: auto;
   height: clamp(38px, 5.2vw, 52px);
   max-width: 100%;
   object-fit: contain;
   background: transparent
+}
+
+/* premium.css's `.home-body .brand-logo{width:190px;height:66px}` beats the
+   clamp above, and the `.home-body .brand-logo` entry in the 84px block higher
+   up then re-imposes a fixed height. Together they make the home wordmark a
+   different size from every other page — which is what changes the header
+   height and makes the bar jump when you navigate between pages. Re-state the
+   clamp so the home wordmark scales exactly like the shop one. */
+.home-body .brand-logo {
+  flex: 0 0 auto;
+  width: auto;
+  height: clamp(38px, 5.2vw, 52px)
 }
 
 .site-header .header-actions {
@@ -799,6 +836,200 @@
   color: var(--accent);
   padding-left: 5px;
   font-size: 11px
+}
+
+/* ------------------------------------------------------------------ *
+ * Below ~760px the three header columns no longer fit side by side. Rather
+ * than hiding the nav (styles.css used to) or letting it wrap at a different
+ * point than the rest of the layout, fold the header into two rows at the SAME
+ * breakpoint as the rest of the phone layout: nav + actions on top, wordmark
+ * underneath. This used to live only inside the 400px block, so between 401px
+ * and 760px the header stayed three-up and overflowed.
+ *
+ * This MUST stay after the header block above: those rules are un-media'd, so
+ * placing this earlier in the file let them override it at every width.
+ * ------------------------------------------------------------------ */
+@media(max-width:760px) {
+
+  /* Flex rather than grid for the bar: with a grid template the nav's
+     min-content width could win and push the actions onto their own line.
+     As a flex row the actions are `flex:0 0 auto` and can never wrap, so
+     Home / Shop / Collections / Search / Bag stay on ONE line, with only
+     the wordmark centred underneath. */
+  .site-header,
+  .catalog-header,
+  .home-body .site-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    /* the base rule is `padding: 0 4.5vw` (a shorthand); re-state the
+       vertical value only so the side padding is untouched. */
+    padding: 12px 4.5vw;
+    height: auto;
+    min-height: 0
+  }
+
+  .site-header .desktop-nav,
+  .catalog-header .desktop-nav {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    line-height: 1.6
+  }
+
+  .site-header .desktop-nav a,
+  .catalog-header .desktop-nav a {
+    padding-bottom: 0;
+    border-bottom: 0;
+    box-shadow: none
+  }
+
+  /* The rule above flattens every link inside the nav strip, which would also
+     strip the open collections menu — its rows lose their tap height and end
+     up ~24px tall and cramped. Re-state the menu row size after it. */
+  .site-header .nav-dropdown-menu a,
+  .catalog-header .nav-dropdown-menu a {
+    padding: 18px
+  }
+
+  /* catalog.css: `.catalog-header .desktop-nav a.active{border-bottom:1px solid
+     #292827;padding-bottom:4px}` — that 5px is what made the catalog header
+     taller than the home header. Same specificity, later in the cascade, so
+     draw the underline with an inset shadow that costs no layout space. */
+  .catalog-header .desktop-nav a.active {
+    padding-bottom: 0;
+    border-bottom: 0;
+    box-shadow: inset 0 -1px 0 currentColor
+  }
+
+  .site-header .desktop-nav a.active {
+    box-shadow: inset 0 -1px 0 currentColor
+  }
+
+  .site-header .desktop-nav::-webkit-scrollbar,
+  .catalog-header .desktop-nav::-webkit-scrollbar {
+    display: none
+  }
+
+  /* The menu is absolutely positioned inside the nav strip, so the strip's
+     overflow-x:auto clips it away — it opens and stays invisible. Keep the
+     strip scrollable while closed, but release the clip while the collections
+     menu is open so the links are actually reachable. app.js toggles
+     `.nav-open` on the strip next to `.nav-dropdown.open`. */
+  .site-header .desktop-nav.nav-open,
+  .catalog-header .desktop-nav.nav-open {
+    overflow: visible
+  }
+
+  .site-header .wordmark,
+  .catalog-header .wordmark {
+    /* full row of its own, centred under the nav row */
+    flex: 0 0 100%;
+    order: 2;
+    display: flex;
+    justify-content: center
+  }
+
+  .site-header .brand-logo,
+  .catalog-header .brand-logo,
+  .home-body .brand-logo {
+    flex: 0 0 auto;
+    height: clamp(32px, 8vw, 42px)
+  }
+
+  .site-header .header-actions,
+  .catalog-header .header-actions {
+    order: 1;
+    flex: 0 0 auto;
+    gap: 14px;
+    flex-wrap: nowrap
+  }
+}
+
+  /* The nav is a horizontally scrollable strip, so on a narrow phone the
+     three links plus the actions no longer fit at their full size: at 360px
+     the nav ran 21px under the Search/Bag buttons and the two collided.
+     Rather than stacking the header into three tall rows, keep everything on
+     the single nav row and shrink the type just enough to fit. */
+  @media(max-width:420px) {
+    .site-header .desktop-nav,
+    .catalog-header .desktop-nav {
+      gap: 13px;
+      line-height: 1.5
+    }
+
+    .site-header .desktop-nav a,
+    .catalog-header .desktop-nav a {
+      font-size: 10px;
+      letter-spacing: .3px
+    }
+
+    .nav-caret {
+      margin-left: 3px;
+      border-left-width: 3px;
+      border-right-width: 3px;
+      border-top-width: 3.5px
+    }
+
+    .site-header .header-actions,
+    .catalog-header .header-actions {
+      gap: 12px
+    }
+
+    .site-header .header-link,
+    .catalog-header .header-link,
+    .site-header .cart-trigger {
+      font-size: 11px
+    }
+  }
+
+  /* Very small phones (SE-class) still overrun at 11px, so trim the last
+     bits of letter-spacing and gap rather than stacking another row. */
+  @media(max-width:360px) {
+    .site-header .desktop-nav,
+    .catalog-header .desktop-nav {
+      gap: 10px
+    }
+
+    .site-header .desktop-nav a,
+    .catalog-header .desktop-nav a {
+      font-size: 9px;
+      letter-spacing: 0
+    }
+
+    .site-header .header-link,
+    .catalog-header .header-link,
+    .site-header .cart-trigger {
+      font-size: 10px
+    }
+
+    .site-header .header-actions,
+    .catalog-header .header-actions {
+      gap: 9px
+    }
+  }
+
+  /* 320px is the narrowest phone still in use; drop the caret and tighten
+     once more so the nav clears the actions on a single row. */
+  @media(max-width:330px) {
+    .site-header .desktop-nav,
+    .catalog-header .desktop-nav {
+      gap: 8px
+    }
+
+    .nav-caret {
+      display: none
+    }
+
+    .site-header .header-actions,
+    .catalog-header .header-actions {
+      gap: 8px
+    }
+  }
 }
 
 /* filter chips scroll sideways instead of stretching the page */
@@ -924,6 +1155,25 @@
   z-index: 1
 }
 
+/* "New" chip — sits over the top-left of the photo, never over the product */
+.product-detail-image>.product-tag-badge[hidden] {
+  display: none
+}
+
+.product-detail-image>.product-tag-badge {
+  top: 14px;
+  left: 14px;
+  background: #292827;
+  color: #fff;
+  font: 700 9px/1 'Libre Baskerville', serif;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(41, 40, 39, .18);
+  pointer-events: none
+}
+
 .product-detail-image>#detail-image {
   display: block;
   width: 100%;
@@ -1010,9 +1260,64 @@
   text-align: center
 }
 
+/* ------------------------------------------------------------------ *
+ * Product detail — keep the copy column inside the page
+ *
+ * catalog.css pins `.detail-description` to `font: 12px/2 'Libre Baskerville'`
+ * with `max-width: 355px`. Libre Baskerville is a wide serif, so at 400px the
+ * copy column's min-content width pushes past the viewport and the whole page
+ * scrolls sideways. Nothing here limits the column itself.
+ * ------------------------------------------------------------------ */
+.product-copy {
+  min-width: 0
+}
+
+.product-copy h1,
+.detail-description,
+.availability,
+.size-label,
+.subtotal {
+  overflow-wrap: break-word
+}
+
+@media(max-width:760px) {
+  /* a 355px cap is meaningless on a phone and only serves to floor the column
+     width once the gutters are taken out */
+  .detail-description {
+    max-width: 100%
+  }
+}
+
 /* ==================================================================
    5. Breakpoints
    ================================================================== */
+
+/* ---- admin: wide tables scroll instead of being crushed ----
+   admin.css ships `.page-table-head,.page-product-row,.page-order-row` at a
+   fixed four-column grid with `min-width: 680px` and `grid-template-columns`
+   re-declared inside a plain `@media(max-width:850px)` block. That block has
+   the same specificity as this file's phone rules but sits EARLIER in the
+   cascade, so on a phone the rows were pinned to 680px wide and simply bled
+   off the right edge of the screen. Below we take them back to a stacked
+   layout at the phone breakpoint.
+
+   `.admin-page .admin-section{overflow:auto}` is the other half of it: it let
+   the whole panel scroll sideways with no visible scrollbar, which is why the
+   admin looked "not responsive" rather than obviously broken. */
+.admin-page .admin-section,
+.admin-page .manager-panel {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch
+}
+
+/* the side drawer is fixed; when it is closed it must not be reachable by
+   keyboard or focus, or tabbing scrolls the page sideways to a panel that
+   isn't on screen */
+@media(max-width:900px) {
+  .admin-sidebar {
+    will-change: transform
+  }
+}
 
 /* ---- large tablets & small laptops ---- */
 @media(max-width:1180px) {
@@ -1049,6 +1354,16 @@
 
   .admin-manage-columns {
     grid-template-columns: minmax(0, 1fr);
+    gap: 24px
+  }
+
+  /* premium.css sets `.admin-topbar{height:142px}` and styles.css sets
+     `height:130px`. Both are taller than the two-line content they hold, and
+     neither shrinks, so on tablets the bar was mostly empty space. */
+  .admin-topbar {
+    height: auto;
+    min-height: 0;
+    padding: 26px 4vw
   }
 
   .admin-modal.product-editor>.product-editor-form {
@@ -1065,54 +1380,149 @@
   }
 }
 
-/* ---- sidebar collapses to a drawer ---- */
+/* ---- narrow screens: sidebar STAYS pinned to the side ----------------
+   This used to turn the sidebar into an off-canvas drawer below 900px
+   (`transform: translateX(-100%)` + a fixed hamburger). On a phone that meant
+   the nav disappeared behind a button that sat on top of the logo, so the
+   workspace looked nothing like the desktop version.
+
+   The sidebar is now a permanent left rail at every width, exactly like the
+   laptop layout: fixed, full-height, content pushed right by its width. It just
+   gets narrower and its type scales down so a 360px phone still has room for
+   the content. The drawer, its toggle and the scrim are disabled below. ---- */
 @media(max-width:900px) {
+  /* styles.css ships a `@media(max-width:850px)` block that flattens the
+     sidebar into a full-width horizontal bar and hides its nav:
+         .admin-sidebar { position: static; width: 100%; height: auto; display: block }
+         .admin-label, .admin-sidebar nav, .sidebar-bottom { display: none }
+         .admin-main { margin: 0 }
+     That block sits in an earlier stylesheet but matches at the same widths, so
+     every property it sets must be re-stated here or it leaks through. In
+     particular `position` and `height` have to be re-pinned, otherwise the rail
+     renders as a static 152px box that only grows to its content height. */
   .admin-sidebar {
-    transform: translateX(-100%);
-    transition: transform .28s ease;
-    z-index: 50;
-    width: 262px;
-    overflow-y: auto
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    height: auto;
+    width: 152px;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 40
   }
 
-  .admin-sidebar.open {
-    transform: translateX(0)
+  /* styles.css hides these on small screens; the rail needs them back */
+  .admin-label {
+    display: block
   }
 
-  .admin-logo {
-    margin-bottom: 34px
-  }
-
-  .admin-main {
-    margin-left: 0
-  }
-
-  .admin-sidebar-toggle {
+  .admin-sidebar nav {
     display: grid
   }
 
-  .admin-topbar {
-    padding: 24px 26px 20px;
-    height: auto;
-    justify-content: flex-end;
-    align-items: center
+  .sidebar-bottom {
+    display: block;
+    margin-top: auto
   }
 
-  .admin-topbar>div:first-child {
-    margin-right: auto;
-    padding-left: 54px
+  /* the drawer affordances are unused now that the rail never leaves the page */
+  .admin-sidebar-toggle,
+  .admin-sidebar-scrim {
+    display: none
+  }
+
+  .admin-logo {
+    margin: 0 0 22px
+  }
+
+  .admin-sidebar .brand-logo {
+    height: 30px;
+    width: auto;
+    max-width: 100%
+  }
+
+  .admin-label {
+    margin: 0 6px 10px;
+    font-size: 8px
+  }
+
+  /* premium.css pins `.admin-nav{white-space:nowrap}` and `.nav-count` is pushed
+     right with `margin-left:auto`. Together they made the nav rows wider than
+     the 152px rail, so the links and their count badges bled out past the
+     sidebar's right edge. Let the label wrap and keep the badge inside. */
+  .admin-nav {
+    padding: 9px 8px;
+    gap: 8px;
+    font-size: 10px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+    min-width: 0
+  }
+
+  .admin-nav>span {
+    min-width: 0
+  }
+
+  .nav-count {
+    margin-left: auto;
+    flex: none;
+    font-size: 8px;
+    padding: 2px 5px
+  }
+
+  .admin-user {
+    padding: 14px 6px 0;
+    margin-top: 16px;
+    gap: 8px
+  }
+
+  .admin-user>div {
+    min-width: 0
+  }
+
+  .admin-user strong {
+    font-size: 10px
+  }
+
+  .admin-user small {
+    font-size: 8px;
+    overflow-wrap: anywhere
+  }
+
+  /* content clears the rail, same model as `.admin-main{margin-left:235px}` */
+  .admin-main {
+    margin-left: 152px
+  }
+
+  .admin-topbar {
+    padding: 22px 4vw 18px;
+    height: auto;
+    justify-content: space-between;
+    align-items: center
   }
 
   .admin-topbar h1 {
     font-size: 20px
   }
 
+  /* no hamburger to dodge any more, so the title keeps its normal gutter */
+  .admin-topbar>div:first-child {
+    margin-right: auto;
+    padding-left: 0
+  }
+
+  /* the rail is a permanent gutter, so keep the side padding modest */
   .admin-content {
-    padding: 26px 26px 60px
+    padding: 24px 4vw 60px
   }
 
   .admin-modal.product-editor>.product-editor-form>.editor-bar {
-    padding-left: 52px
+    padding-left: 0
   }
 
   .product-detail-grid {
@@ -1123,9 +1533,147 @@
   .product-detail-image>#detail-image {
     max-height: 78vh
   }
+}
+
+/* ---- phones: the rail drops its labels and becomes an icon strip -------
+   A 152px text rail plus the content is too much for a 360-390px screen: it
+   left the main column only ~230px, which crushed the stat cards and headings.
+   The sidebar still sits pinned on the left (same as the laptop layout), it
+   just narrows to an icon strip and the text labels step aside. The icons are
+   already in the markup as the first character of every `.admin-nav`, so
+   hiding the <span> leaves a clean, tappable icon column.
+
+   Above 560px there is room for the labels, so this only kicks in on phones. */
+@media(max-width:560px) {
+  .admin-sidebar {
+    width: 62px;
+    padding: 16px 8px;
+    align-items: center
+  }
+
+  .admin-logo {
+    margin: 0 0 18px
+  }
+
+  /* the wordmark is unreadable at 62px — keep just the mark */
+  .admin-sidebar .brand-logo {
+    width: 30px;
+    height: 30px;
+    object-fit: contain
+  }
+
+  .admin-label {
+    display: none
+  }
+
+  .admin-sidebar nav {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    justify-items: center
+  }
+
+  /* icon-only: the label collapses, the leading glyph stays centred */
+  .admin-nav {
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    justify-content: center;
+    font-size: 17px;
+    border-radius: 4px
+  }
+
+  .admin-nav>span {
+    display: none
+  }
+
+  /* the count badge would sit on top of the icon — move it to a corner dot */
+  .nav-count {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    margin: 0;
+    font-size: 7px;
+    padding: 1px 4px
+  }
+
+  .admin-nav {
+    position: relative
+  }
+
+  .sidebar-bottom {
+    width: 100%;
+    justify-items: center
+  }
+
+  .admin-user {
+    display: none
+  }
+
+  /* content clears the narrower strip */
+  .admin-main {
+    margin-left: 62px
+  }
+
+  .admin-topbar,
+  .admin-content {
+    padding-left: 4vw;
+    padding-right: 4vw
+  }
+
+  /* With only ~330px to play with, the greeting and the "View storefront" +
+     avatar pair cannot share one line — the button ran into the avatar and both
+     crowded the right edge. Stack the bar instead: greeting first, actions on
+     their own full-width row underneath. */
+  .admin-topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px
+  }
+
+  .admin-topbar>div:first-child {
+    margin-right: 0
+  }
+
+  .admin-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%
+  }
+
+  /* the button takes the leftover room, the avatar keeps its circle */
+  .admin-top-actions .button {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+    white-space: nowrap
+  }
+
+  .admin-top-actions .admin-avatar {
+    flex: none
+  }
 }/* ---- tablets: editor is single-column, so the six-column size table would
    squeeze its inputs. Switch to labelled cards so nothing is cramped. ---- */
 @media(min-width:761px) and (max-width:1180px) {
+  /* admin.css pins these rows to `min-width: 650px/560px` and only relaxes
+     them below 850px; between 850px and 1180px they were overflowing the
+     panel and forcing a horizontal scrollbar on the whole page. */
+  .admin-order-line,
+  .customer-line,
+  .customer-head,
+  .admin-product-row {
+    min-width: 0
+  }
+
+  /* a four-column order row with a select is tight but workable at 900px+;
+     below that the phone rules take over */
+  .admin-order-line,
+  .customer-line,
+  .customer-head {
+    gap: 12px
+  }
+
   .size-table {
     border: 0;
     padding: 0;
@@ -1210,9 +1758,11 @@
 
   /* --- full-page editor header --- */
   .admin-modal.product-editor>.product-editor-form {
-    padding: 0 16px 70px
+    padding: 0 4.5vw 70px
   }
 
+  /* the editor bar is sticky and the drawer toggle is fixed at the top-left of
+     the page, so the title used to sit underneath it */
   .admin-modal.product-editor>.product-editor-form>.editor-bar {
     padding: 16px 0 14px;
     gap: 12px;
@@ -1318,11 +1868,59 @@
     height: 150px
   }
 
+  /* "Upload image" / "Remove" were being crushed into a one-word-per-line
+     column because workspace.css pins `.picker-buttons .button` to
+     `white-space: nowrap; flex: 0 1 auto` inside a 1fr grid cell. Let them
+     share the row evenly instead. */
   .picker-buttons {
     justify-content: center
   }
 
-  /* --- order rows stack --- */
+  .picker-buttons .button {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    padding: 10px 12px
+  }
+
+  /* --- order rows stack ---
+     admin.css re-declares `.page-order-row`/`.page-product-row` inside its own
+     `@media(max-width:850px)` block with `min-width: 680px`. That rule has the
+     same specificity as this one but comes earlier in the cascade, so it wins
+     ties on source order and the row stayed 680px wide on a 390px screen.
+     `min-width: 0` here is what actually lets the row shrink. */
+  .page-table-head,
+  .page-product-row,
+  .page-order-row,
+  .admin-order-line,
+  .customer-line,
+  .customer-head,
+  .admin-product-row {
+    min-width: 0
+  }
+
+  /* The column header only makes sense while the rows below it are a real
+     table. On a phone the rows become stacked cards, so the header is just
+     stray labels floating over them ("TOTAL" above nothing, "STATUS" offset
+     from the dropdown). Hide it.
+
+     admin.css ships `.page-table-head{display:grid}` un-media'd AND re-states
+     the selector inside its own `@media(max-width:850px)` block with
+     `min-width:680px`. A bare `.page-table-head{display:none}` here ties on
+     specificity and only wins on source order, which is fragile. Scoping to
+     `.admin-page` (the class on <body> of every admin page) makes this rule
+     out-specify both without resorting to !important. */
+  .admin-page .page-table-head,
+  .admin-page .customer-page-head {
+    display: none
+  }
+
+  /* Two columns: the total takes the free space, the status select sits on the
+     right of the SAME line, and Delete gets its own row underneath. The old
+     rules let all three auto-flow into the 2-col grid, which parked the total in
+     a 1fr cell (so it looked like a full-width bar), pushed the select to a
+     different line, and left Delete as a wide centred bar that read like a
+     primary button rather than a row action. */
   .page-order-row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px 12px;
@@ -1333,12 +1931,30 @@
     grid-column: 1/-1
   }
 
+  /* total + status share one line, total hugging the left of that line */
   .page-order-row>span {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: center;
     font-size: 12px
   }
 
   .page-order-row select {
-    width: 100%
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+    width: auto;
+    max-width: 100%
+  }
+
+  /* Delete is a quiet row action: small, right-aligned, no button chrome */
+  .page-order-row>.danger {
+    grid-column: 1/-1;
+    grid-row: 3;
+    justify-self: end;
+    width: auto;
+    padding: 0;
+    text-align: right
   }
 
   .page-customer-row,
@@ -1356,10 +1972,6 @@
     grid-column: 1/-1
   }
 
-  .customer-page-head {
-    display: none
-  }
-
   /* --- product rows stack --- */
   .product-row-head {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1370,6 +1982,20 @@
     grid-column: 1/-1;
     display: flex;
     gap: 16px
+  }
+
+  /* the products manager list is a 560px-min table in admin.css */
+  .manager-list {
+    overflow-x: visible
+  }
+
+  .admin-product-row {
+    min-width: 0
+  }
+
+  /* quick-stat pairs are unreadable when each is ~150px wide */
+  .quick-stat-list {
+    grid-template-columns: minmax(0, 1fr)
   }
 
   .size-chips {
@@ -1422,13 +2048,9 @@
     right: 6vw
   }
 
-  .site-header,
-  .catalog-header {
-    padding: 14px 16px;
-    gap: 10px
-  }
-
-  .header-actions {
+  /* the header itself is handled by the 760px block above */
+  .site-header .header-actions,
+  .catalog-header .header-actions {
     gap: 12px
   }
 
@@ -1450,20 +2072,32 @@
 /* ---- very small phones ---- */
 @media(max-width:400px) {
   .admin-content {
-    padding: 22px 16px 50px
+    padding: 22px 4vw 50px
   }
 
   .admin-topbar {
-    padding: 20px 16px 18px
+    padding: 20px 4vw 18px
   }
 
   .admin-modal.product-editor>.product-editor-form {
-    padding: 0 14px 60px
+    padding: 0 4vw 60px
   }
 
-  .product-grid {
-    grid-template-columns: minmax(0, 1fr)
-  }
+  /* Keep the shop's product grid on a single column at this width — the
+         card copy needs the room. The homepage grid below opts back into two. */
+      .product-grid {
+        grid-template-columns: minmax(0, 1fr)
+      }
+
+      /* On the homepage the "New arrivals" grid was still collapsing to a single
+         column at this width, which made the edit read as one very long list on
+         a phone. It is the storefront's most scanned section, so give it the same
+         two-up layout the tablet range uses and let the card image scale down
+         instead of stacking every product full-width. */
+      .home-body .product-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px 12px
+      }
 
   .size-row {
     grid-template-columns: minmax(0, 1fr)
@@ -1482,50 +2116,19 @@
     flex: 1
   }
 
-  /* phone header: nav + actions on one row, wordmark below */
-  .site-header,
-  .catalog-header {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "nav actions" "logo logo";
-    row-gap: 10px;
-    height: auto;
-    min-height: 0;
-    padding: 14px 16px
+  /* header layout lives in the 760px block; only the phone-sized scale belongs
+     here. This block used to re-declare the whole two-row header with
+     `padding: 14px 16px`, which reset the side padding from 4.5vw to 16px and
+     only took effect below 400px — so the header stayed three-up and
+     overflowing between 401px and 760px. */
+  .site-header .brand-logo,
+  .catalog-header .brand-logo {
+    height: clamp(32px, 8vw, 40px)
   }
 
-  .site-header .desktop-nav {
-    grid-area: nav;
-    min-width: 0;
-    gap: 16px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    justify-content: flex-start
-  }
-
-  .site-header .desktop-nav::-webkit-scrollbar {
-    display: none
-  }
-
-  .site-header .desktop-nav a {
-    white-space: nowrap
-  }
-
-  .site-header .wordmark {
-    grid-area: logo
-  }
-
-  .site-header .brand-logo {
-    height: clamp(34px, 10vw, 44px)
-  }
-
-  .site-header .header-actions {
-    grid-area: actions;
-    gap: 14px;
-    justify-self: end
-  }
-
-  /* keep "Search" on phones ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â styles.css hides it below 850px */
-  .site-header .header-link {
+  /* keep "Search" on phones — styles.css hides it below 850px */
+  .site-header .header-link,
+  .catalog-header .header-link {
     display: inline-block !important
   }
 
@@ -1538,6 +2141,44 @@
 
   .filter-row::-webkit-scrollbar {
     display: none
+  }
+}
+
+/* ---- filter chip strip (all phone widths) --------------------------------
+ * The scrollable treatment above only existed inside `@media(max-width:400px)`,
+ * so between 401px and roughly 560px — where the six chips are still wider than
+ * the viewport — the row stayed `flex` with `nowrap`, stuck out past the page
+ * and dragged the whole document sideways. Any width where the chips do not fit
+ * needs the strip, so it is applied to the whole phone range here instead.
+ * `-webkit-overflow-scrolling: touch` keeps the momentum scroll on iOS. */
+@media(max-width:760px) {
+  .filter-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    /* room for the active chip's underline without clipping it */
+    padding-bottom: 4px
+  }
+
+  .filter-row .filter {
+    flex: 0 0 auto;
+    white-space: nowrap
+  }
+
+  .filter-row::-webkit-scrollbar {
+    display: none
+  }
+
+  /* Edge fade hints that the row scrolls; purely decorative. */
+  .filter-row {
+    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%);
+    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%)
   }
 }
 

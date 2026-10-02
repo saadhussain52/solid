@@ -1,1 +1,28 @@
 .andromity/
+
+# Real secrets — never commit these. Copy .env.example to .env instead.
+.env
+
+# Order data is per-install, not source. Set DATA_DIR to a mounted volume in
+# production; see .env.example.
+data/
+data-*/
+
+# node_modules, if you ever add a dependency
+node_modules/
+
+# Test scratch files from local runs
+_*.mjs
+_*.json
+_*.txt
+_*.log
+shot-*.png
+_out.*
+
+# One-off audit captures from responsive checks
+CHECK-*.png
+MOBILE-*.png
+RAIL-*.png
+SAME-SESSION.png
+shot2-*.png
+final.txt
