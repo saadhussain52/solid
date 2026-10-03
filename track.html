@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" /><link rel="stylesheet" href="premium.css" /><link rel="stylesheet" href="responsive.css" />
+  <link rel="stylesheet" href="styles.css" /><link rel="stylesheet" href="premium.css" /><link rel="stylesheet" href="responsive.css" /><link rel="stylesheet" href="theme-green.css">
   <style>
     .track-page{max-width:760px;margin:0 auto;padding:70px 5vw 90px}
     .track-form{display:flex;gap:10px;flex-wrap:wrap;margin:26px 0 0}
@@ -55,7 +55,7 @@
   <header class="site-header">
     <nav class="desktop-nav"><a href="index.html">Home</a><a href="all.html">Shop</a></nav>
     <a class="wordmark" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-transparent.png" alt="Solids — No prints, just style"></a>
-    <div class="header-actions"><a class="header-link" href="all.html">Shop</a><a class="header-link" href="mailto:solids@studio.pk">Contact</a></div>
+    <div class="header-actions"><a class="header-link" href="all.html">Shop</a><a class="header-link" href="mailto:solid.pk.official@gmail.com">Contact</a></div>
   </header>
 
   <main class="track-page">
@@ -72,8 +72,8 @@
   </main>
 
   <footer class="site-footer">
-    <a class="footer-brand" href="index.html"><img class="brand-logo" src="solids-logo-transparent.png" alt="Solids"><p>Everyday, refined.</p></a>
-    <div class="footer-bottom"><span>© 2026 Solids Official</span><span>Pakistan / PKR</span></div>
+    <a class="footer-brand" href="index.html"><img class="brand-logo" src="solids-logo-light.png" alt="Solids"><p>Everyday, refined.</p></a>
+    <div class="footer-bottom"><span>© 2026 Solids Official</span><span class="footer-phone" data-footer-phone>WhatsApp: +92 341 2782443</span><span>Pakistan / PKR</span></div>
   </footer>
 
   <script src="store-data.js"></script>
@@ -176,7 +176,7 @@
         host.innerHTML = `
           <div class="track-empty"><p>We found ${orders.length} orders on <strong>${escapeHtml(query)}</strong>. Pick the one you want to track:</p></div>
           <div class="track-picks">${rows}</div>
-          <p class="track-hint">If none of these look right, <a href="mailto:solids@studio.pk">email the studio</a> and we will check by hand.</p>`;
+          <p class="track-hint">If none of these look right, <a href="mailto:solid.pk.official@gmail.com">email the studio</a> and we will check by hand.</p>`;
         /* Clicking a row opens that order through the normal result view, so
            there is only ever one rendering of an order on this page. */
         host.querySelectorAll('.track-pick').forEach(button => {
@@ -202,7 +202,7 @@
       const render = order => {
         const host = document.querySelector('#track-result');
         if (!order) {
-          host.innerHTML = `<div class="track-empty"><p>We could not find an order with that reference. Check the order number on your confirmation screen, or <a href="mailto:solids@studio.pk">email the studio</a> and we will look it up for you.</p></div>`;
+          host.innerHTML = `<div class="track-empty"><p>We could not find an order with that reference. Check the order number on your confirmation screen, or <a href="mailto:solid.pk.official@gmail.com">email the studio</a> and we will look it up for you.</p></div>`;
           return;
         }
 
@@ -226,7 +226,7 @@
         const deliveryFee = quote.waived ? 'Free' : money(quote.baseFee != null ? quote.baseFee : (quote.delivery || 0));
 
         const cancelNote = cancelled
-          ? `<div class="track-empty"><p><strong>This order was cancelled.</strong> Nothing further will be shipped and no payment is due. If you were charged, the studio will refund it — <a href="mailto:solids@studio.pk">email us</a> with the order number and we will sort it out.</p></div>`
+          ? `<div class="track-empty"><p><strong>This order was cancelled.</strong> Nothing further will be shipped and no payment is due. If you were charged, the studio will refund it — <a href="mailto:solid.pk.official@gmail.com">email us</a> with the order number and we will sort it out.</p></div>`
           : '';
 
         host.innerHTML = `
@@ -241,7 +241,7 @@
           ${cancelled ? '' : `<div class="track-steps">${steps}</div>`}
 
           <div class="track-items">
-            ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${escapeHtml(item.size || 'One size')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
+            ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${escapeHtml(item.color || 'Colour not recorded')} · ${escapeHtml(item.size || 'Size not recorded')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
           </div>
 
           <div class="track-items" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
@@ -250,7 +250,7 @@
             <div><span><strong>Total</strong></span><em><strong>${money(Store.orderTotal(order))}</strong></em></div>
           </div>
 
-          <p class="track-hint">Questions about this order? Write to <a href="mailto:solids@studio.pk">solids@studio.pk</a> with your order number and we will pick it up from there.</p>`;
+          <p class="track-hint">Questions about this order? Write to <a href="mailto:solid.pk.official@gmail.com">solid.pk.official@gmail.com</a> with your order number and we will pick it up from there.</p>`;
       };
 
       /* Pre-fill from ?id= so the confirmation screen's "Track this order"

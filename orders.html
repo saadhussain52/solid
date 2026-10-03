@@ -12,12 +12,12 @@
     rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="premium.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="responsive.css">
+  <link rel="stylesheet" href="premium.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="responsive.css"><link rel="stylesheet" href="theme-green.css">
 </head>
 
 <body class="admin-body admin-page">
   <aside class="admin-sidebar">
-    <a class="wordmark admin-logo" href="admin.html"><img class="brand-logo" src="solids-logo-transparent.png"
+    <a class="wordmark admin-logo" href="admin.html"><img class="brand-logo" src="solids-logo-light.png"
         alt="Solids"></a>
     <p class="admin-label">WORKSPACE</p>
     <nav>
@@ -32,7 +32,7 @@
       <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
       <div class="admin-user">
         <div class="avatar">SA</div>
-        <div><strong>Studio Admin</strong><small>solids@studio.pk</small></div>
+        <div><strong>Studio Admin</strong><small>solid.pk.official@gmail.com</small></div>
       </div>
     </div>
   </aside>
@@ -56,6 +56,7 @@
             full details.</p>
         </div>
         <div class="heading-actions">
+          <input class="page-search" id="orders-page-search" type="search" placeholder="Search order no, name, email or phone…" aria-label="Search orders">
           <span class="muted" id="orders-page-count"></span>
           <button class="button button-dark" id="page-invoice">Download invoices</button>
         </div>
@@ -74,6 +75,11 @@
   <script src="admin-pages.js"></script>
   <script>
     document.querySelector('#page-invoice').addEventListener('click', () => window.downloadInvoices());
+
+    /* Live search across the fields a customer actually gives us, so answering
+       "where is my order?" does not need scrolling through the whole list. */
+    const search = document.querySelector('#orders-page-search');
+    search.addEventListener('input', () => window.filterOrders(search.value));
   </script>
 </body>
 

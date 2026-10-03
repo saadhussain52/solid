@@ -1,0 +1,270 @@
+/* ==========================================================================
+   Solids — green brand theme
+   --------------------------------------------------------------------------
+   The brand green lives in --accent in styles.css. This sheet repaints every
+   place the old terracotta accent was written as a literal hex value, because
+   those rules never went through the token and would otherwise stay brown.
+
+   It is linked LAST on every storefront page, so it only overrides colour — no
+   layout, no behaviour — and can be deleted to return to the previous palette.
+   ========================================================================== */
+
+:root {
+  --accent: #3e6b4f;
+  /* A lighter wash for tinted panels, badges and chart fills. */
+  --accent-soft: #e4ece6;
+  /* Slightly deeper wash for the full-width section bands, where a paler tint
+     disappeared against the white page margin. */
+  --accent-band: #cfdfd3;
+  --accent-mid: #7fa38b;
+  /* Warm browns that were used for text tints, pushed to a matching green-grey. */
+  --tint-1: #5c6f62;
+  --tint-2: #9aa89c;
+  --tint-3: #c9d4cc;
+}
+
+/* --- header & announcement ------------------------------------------------ */
+.announcement span {
+  color: var(--accent)
+}
+
+.desktop-nav a:hover,
+.header-link:hover {
+  color: var(--accent)
+}
+
+.eyebrow {
+  color: var(--accent)
+}
+
+/* --- buttons -------------------------------------------------------------- */
+.button-dark {
+  background: var(--accent);
+  border-color: var(--accent)
+}
+
+.button-dark:hover {
+  background: #33583f;
+  border-color: #33583f
+}
+
+.catalog-shop-button {
+  background: var(--accent)
+}
+
+.catalog-shop-button:hover {
+  background: #33583f
+}
+
+.detail-add {
+  background: var(--accent)
+}
+
+.buy-now {
+  background: var(--accent-mid)
+}
+
+/* --- green section backgrounds ---------------------------------------------
+
+   Two shelves get a full-bleed green wash: the homepage "New arrivals" grid
+   and the "You may also like" rail under a product. Both are wide, quiet bands
+   of nothing but product tiles, so tinting them gives the page its one moment
+   of colour without touching a single card.
+
+   A pale wash rather than the solid brand green, because the tiles on top carry
+   dark ink text and product photography — a deep fill would swallow both. The
+   wash stops short of the viewport edge so the page keeps its white margin. */
+#shop,
+.related-products {
+  background: var(--accent-band);
+  /* Bleed the wash to the page edge; the section itself is inset by .section. */
+  box-shadow: 0 0 0 100vmax var(--accent-band);
+  clip-path: inset(0 -100vmax);
+}
+
+#shop {
+  padding-block: clamp(56px, 7vw, 96px)
+}
+
+.related-products {
+  padding-top: 56px;
+  padding-bottom: 96px;
+  border-top: 1px solid var(--accent-soft);
+  /* The rail sits inside .product-main, which is already inset by 4.5vw. */
+  margin-inline: -4.5vw;
+  padding-inline: 4.5vw;
+  margin-top: 20px
+}
+
+/* Inside the band the headings need to hold their own — the muted greys that
+   read fine on paper fall away against a tint. */
+#shop .eyebrow,
+.related-products .eyebrow {
+  color: var(--accent)
+}
+
+/* The shop filter row is text-only by design: a bare label with a bottom rule,
+   no fill. Filling the active one turned it into a green box, which is not the
+   pattern anywhere else on the site. So the active state is carried by the
+   label colour and the rule underneath — no background at all. */
+#shop .filter,
+.related-products .filter {
+  color: var(--muted);
+  border-bottom: 1px solid transparent;
+  transition: color .25s, border-color .25s
+}
+
+#shop .filter:hover,
+.related-products .filter:hover {
+  color: var(--accent)
+}
+
+#shop .filter.active,
+.related-products .filter.active {
+  background: none;
+  color: var(--accent);
+  border-bottom: 1px solid var(--accent)
+}
+
+/* Hairlines and card separators inside the band. */
+#shop .filter-row,
+.related-products .filter-row {
+  border-color: var(--accent-mid)
+}
+
+/* The catalogue sidebar uses .catalog-filter, a full-width left-aligned list
+   rather than the underlined row. Same rule: green text, never a green fill. */
+.catalog-filter {
+  border-bottom: 1px solid var(--accent-soft)
+}
+
+.catalog-filter:hover {
+  color: var(--accent)
+}
+
+.catalog-filter.active {
+  background: none;
+  color: var(--accent);
+  font-weight: 600
+}
+#shop .product-details,
+.related-products .product-details {
+  border-color: var(--accent-mid)
+}
+
+.related-view-all {
+  color: var(--accent)
+}
+
+/* Sold-out tiles are greyed with a filter; on the tint they would go muddy, so
+   the flag is restated in the brand green instead. */
+#shop .sold-out-flag,
+.related-products .sold-out-flag {
+  background: var(--accent)
+}
+
+/* --- cart & badges -------------------------------------------------------- */
+.cart-trigger span {
+  color: var(--accent)
+}
+
+.product-tag-badge {
+  background: var(--accent);
+  color: #fff
+}
+
+/* --- catalogue ------------------------------------------------------------ */
+.catalog-collection-card p {
+  color: var(--tint-1)
+}
+
+.availability strong,
+.size-label strong {
+  color: var(--tint-1)
+}
+
+/* The strike-through on an unavailable size was terracotta. */
+.size-options button:disabled {
+  background: linear-gradient(135deg, transparent 48%, var(--accent-soft) 49%, transparent 51%)
+}
+
+/* The banner label used to be brand green. It sits on a photo now, so it is
+   white like the rest of the banner copy. */
+.all-banner span {
+  color: #fff;
+  opacity: .9
+}
+
+/* --- footer --------------------------------------------------------------- */
+.site-footer a:hover {
+  color: var(--accent-mid);
+  border-color: var(--accent-mid)
+}
+
+/* The footer and the admin sidebar sit on charcoal, where the full-strength
+   brand green turns muddy. Both point at a lighter mark file instead of
+   recolouring the header logo with a CSS filter — a filter reads as a tinted
+   silhouette rather than the real colour, and reusing the header's filename
+   leaves browsers holding the old black PNG in cache. */
+.footer-brand .brand-logo,
+.admin-logo .brand-logo {
+  filter: none
+}
+
+/* --- admin ---------------------------------------------------------------- */
+.admin-nav.active,
+.admin-nav:hover {
+  background: #2f3a33
+}
+.admin-nav.active {
+  box-shadow: inset 2px 0 var(--accent)
+}
+.manager-edit,
+.mini-action,
+.invoice-button {
+  color: var(--accent)
+}
+.manager-delete,
+.admin-category-row button:last-child,
+.mini-action.danger {
+  color: #8a4a3c
+}
+.manager-edit:hover,
+.mini-action:hover,
+.invoice-button:hover {
+  background: var(--accent-soft)
+}
+.admin-modal input:focus,
+.admin-modal select:focus,
+.admin-modal textarea:focus,
+#category-form input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(62, 107, 79, .12)
+}
+.admin-nav:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline-color: var(--accent)
+}
+.analytics-bars i {
+  background: linear-gradient(var(--accent-mid), var(--accent-soft))
+}
+.analytics-bars i:hover {
+  background: var(--accent)
+}
+.order-avatar {
+  background: var(--accent-soft);
+  color: var(--accent)
+}
+.order-arrow,
+.page-product-row button {
+  color: var(--accent)
+}
+.status.low-stock,
+.status.pending {
+  color: var(--accent)
+}
+/* The "SA" account chip and the danger tone in the top bar were both terracotta. */
+.admin-avatar {
+  background: var(--accent)
+}

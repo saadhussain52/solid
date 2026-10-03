@@ -84,6 +84,26 @@
     $$('#sidebar-toggle, .admin-sidebar-scrim').forEach(el => el.remove());
   }
 
+  /* A storage problem must not be a toast that vanishes after two seconds — the
+     admin needs to know their product did NOT save, so this banner stays up. */
+  function storageBanner() {
+    let element = $('#storage-warning');
+    if (!element) {
+      element = document.createElement('div');
+      element.id = 'storage-warning';
+      element.className = 'storage-warning';
+      document.body.appendChild(element);
+    }
+    const paint = message => {
+      element.textContent = message || '';
+      element.classList.toggle('show', Boolean(message));
+    };
+    paint(Store.storageError && Store.storageError());
+    Store.onStorageError(paint);
+    return paint;
+  }
+  window.storageBanner = storageBanner;
+
   /* -------------------------------------------------------- image picker */
 
   /**
@@ -370,7 +390,13 @@
         gallery: gallery.length ? gallery : [image],
         sizes
       };
-      Store.upsertProduct(payload);
+      const saved = Store.upsertProduct(payload);
+      if (saved < 0) {
+        /* Storage refused the write — the product is NOT saved. Keep the editor
+           open so nothing the admin typed is lost, and say what went wrong. */
+        toast(Store.storageError() || 'Could not save the product');
+        return;
+      }
       modal.classList.remove('show');
       toast(index >= 0 ? 'Product updated' : 'Product added');
       document.dispatchEvent(new CustomEvent('store:changed', { detail: { type: 'product' } }));
@@ -386,15 +412,57 @@
 
   const ORDER_STATUSES = ['Pending', 'Paid', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
+  /* What an admin types to find an order: the reference we emailed them, who it
+   is from, or how to reach them. A customer only ever knows one of these. */
+let orderSearchTerm = '';
+
+function orderMatches(order, term) {
+  const haystack = [
+    order.id,
+    order.trackingId,
+    order.customer,
+    order.email,
+    order.phone,
+    order.status,
+    order.address,
+    orderItemSummary(order)
+  ].filter(Boolean).join(' ').toLowerCase();
+  return haystack.indexOf(term) !== -1;
+}
+
+function filterOrders(term) {
+  orderSearchTerm = term || '';
+  renderOrders($('#orders-page-list'));
+  const counter = $('#orders-page-count');
+  if (!counter) return;
+  const total = Store.state.orders.length;
+  const shown = $('#orders-page-list')
+    ? $('#orders-page-list').querySelectorAll('.page-order-row').length
+    : total;
+  counter.textContent = orderSearchTerm.trim()
+    ? shown + ' of ' + total + ' orders'
+    : total + ' orders';
+}
+
+/* "Bone / L" reads better than "(Bone / L)" repeated three times, and it keeps
+     the search haystack and the admin sheet saying the same thing. */
   function orderItemSummary(order) {
-    return (order.items || []).map(item =>
-      `${escapeHtml(item.name)}${item.size ? ` (${escapeHtml(item.size)})` : ''} × ${item.qty}`).join(', ') || '—';
+    return (order.items || []).map(item => {
+      const variant = [item.color || 'Colour not recorded', item.size || 'Size not recorded'].join(' / ');
+      return `${escapeHtml(item.name)} (${escapeHtml(variant)}) × ${item.qty}`;
+    }).join(', ') || '—';
   }
 
   function renderOrders(root) {
     if (!root) return;
-    const orders = Store.state.orders;
-    root.innerHTML = orders.map((order, index) => `
+    /* Re-applied on every render, so a search that survives a status change or
+       a delete still shows only the matching rows. */
+    const term = String(orderSearchTerm || '').trim().toLowerCase();
+    const orders = Store.state.orders
+      .map((order, index) => ({ order, index }))
+      .filter(({ order }) => !term || orderMatches(order, term));
+
+    root.innerHTML = orders.map(({ order, index }) => `
       <div class="page-order-row" data-order="${index}">
         <button class="page-order-main" data-open-order="${index}">
           <strong>${escapeHtml(order.id)}</strong>
@@ -406,7 +474,8 @@
           ${ORDER_STATUSES.map(status => `<option${status === order.status ? ' selected' : ''}>${status}</option>`).join('')}
         </select>
         <button class="danger" data-remove-order="${index}">Delete</button>
-      </div>`).join('') || '<p class="muted">No orders yet.</p>';
+      </div>`).join('')
+      || `<p class="muted">${term ? 'No order matches "' + escapeHtml(orderSearchTerm.trim()) + '".' : 'No orders yet.'}</p>`;
 
     $$('[data-order-status]', root).forEach(select => select.addEventListener('change', event => {
       Store.setOrderStatus(Number(event.target.dataset.orderStatus), event.target.value);
@@ -460,7 +529,7 @@
           ${(order.items || []).map(item => `
             <div class="order-sheet-line">
               <strong>${escapeHtml(item.name)}</strong>
-              <span>${item.size ? 'Size ' + escapeHtml(item.size) : 'One size'}</span>
+              <span>${[item.color || 'Colour not recorded', item.size ? 'Size ' + escapeHtml(item.size) : 'Size not recorded'].map(escapeHtml).join(' · ')}</span>
               <span>${money(item.price)} × ${item.qty}</span>
               <b>${money(item.price * item.qty)}</b>
             </div>`).join('') || '<p class="muted">No items recorded.</p>'}
@@ -489,6 +558,7 @@
     URL.revokeObjectURL(link.href);
   }
   window.downloadInvoices = downloadInvoices;
+  window.filterOrders = filterOrders;
 
   /* -------------------------------------------------------- customers */
 
@@ -869,6 +939,7 @@
   });
 
   initShell();
+  storageBanner();
   const boot = PAGES[PAGE];
   if (boot) boot();
 

@@ -839,7 +839,7 @@
 }
 
 /* ------------------------------------------------------------------ *
- * Below ~760px the three header columns no longer fit side by side. Rather
+ * Below ~900px the three header columns no longer fit side by side. Rather
  * than hiding the nav (styles.css used to) or letting it wrap at a different
  * point than the rest of the layout, fold the header into two rows at the SAME
  * breakpoint as the rest of the phone layout: nav + actions on top, wordmark
@@ -849,7 +849,7 @@
  * This MUST stay after the header block above: those rules are un-media'd, so
  * placing this earlier in the file let them override it at every width.
  * ------------------------------------------------------------------ */
-@media(max-width:760px) {
+@media(max-width:900px) {
 
   /* Flex rather than grid for the bar: with a grid template the nav's
      min-content width could win and push the actions onto their own line.

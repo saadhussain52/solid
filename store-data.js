@@ -60,8 +60,13 @@
       branch: 'Gulberg III, Lahore',
       instructions: 'Send the transfer receipt to this email. We dispatch as soon as the amount reflects.'
     },
-    supportEmail: 'solids@studio.pk',
-    supportPhone: '+92 300 0000000'
+    supportEmail: 'solid.pk.official@gmail.com',
+    supportPhone: '+92 341 2782443',
+    /* Number the floating WhatsApp button opens a chat with. Digits only —
+       the button builds the wa.me link from it. Edited from the admin panel's
+       Delivery & payments card. */
+    whatsappNumber: '923412782443',
+    instagramUrl: 'https://www.instagram.com/solids.pk.official'
   };
 
   var PK_CITIES = [
@@ -179,9 +184,12 @@
     { name: 'Bottoms', image: IMAGE.wideLeg }
   ];
 
+  /* Only the first one ships live — it is what the Shop page banner reads.
+     The second sits there as a spare to edit rather than a second slide, so
+     there is never an ambiguous "which one is showing?". */
   var DEFAULT_BANNERS = [
     { title: 'Chapter 09', subtitle: 'End of summer', image: IMAGE.hero, active: true },
-    { title: 'Monochrome', subtitle: 'Live now', image: IMAGE.banner, active: true }
+    { title: 'Monochrome', subtitle: 'Live now', image: IMAGE.banner, active: false }
   ];
 
   var DEFAULT_ORDERS = [
@@ -211,8 +219,30 @@
     }
   }
 
+  /* localStorage is only ~5MB and product photos are stored inline as base64, so a
+     save can genuinely fail with QuotaExceededError. That error used to be swallowed
+     here: the admin clicked "Save product", saw a success toast, and then found the
+     product gone after a refresh. write() now reports the failure, keeps the message
+     for the banner, and notifies anything listening. */
+  var lastWriteError = null;
+  var storageListeners = [];
+
+  function onStorageError(listener) { storageListeners.push(listener); }
+
   function write(key, value) {
-    try { global.localStorage.setItem(key, JSON.stringify(value)); } catch (error) { /* storage full / private mode */ }
+    try {
+      global.localStorage.setItem(key, JSON.stringify(value));
+      lastWriteError = null;
+      return true;
+    } catch (error) {
+      lastWriteError = (error && error.name === 'QuotaExceededError')
+        ? 'Browser storage is full — your product photos are too large. Use smaller images, or delete an old product.'
+        : 'This browser is blocking storage (private mode?), so nothing was saved.';
+      storageListeners.forEach(function (listener) {
+        try { listener(lastWriteError); } catch (ignored) { /* a bad listener must not break a save */ }
+      });
+      return false;
+    }
   }
 
   function slugify(value) {
@@ -289,6 +319,10 @@
     base.sold = Math.max(0, num(base.sold));
     base.colors = (Array.isArray(base.colors) && base.colors.length) ? base.colors : DEFAULT_COLORS.slice();
     base.gallery = (Array.isArray(base.gallery) && base.gallery.length) ? base.gallery : [base.image];
+    /* Optional exact colour previews: images are variant photos; masks are
+       transparent garment silhouettes aligned with the main product image. */
+    base.colorImages = base.colorImages && typeof base.colorImages === 'object' && !Array.isArray(base.colorImages) ? base.colorImages : {};
+    base.colorMasks = base.colorMasks && typeof base.colorMasks === 'object' && !Array.isArray(base.colorMasks) ? base.colorMasks : {};
     base.description = base.description || meta.description;
     base.reviews = (Array.isArray(base.reviews) && base.reviews.length) ? base.reviews : meta.reviews;
     base.faqs = (Array.isArray(base.faqs) && base.faqs.length) ? base.faqs : meta.faqs;
@@ -340,17 +374,26 @@
     /* There is no remote-area surcharge any more — only the two tiers. */
     delete base.remoteFee;
     delete base.remoteCities;
+    /* The floating WhatsApp button builds a wa.me link, which needs digits only
+       and no "+". Admin types whatever is comfortable ("+92 341 2782443"), so
+       strip everything else instead of producing a broken chat link. */
+    base.whatsappNumber = String(base.whatsappNumber || '').replace(/\D/g, '');
+    if (!/^\d{8,15}$/.test(base.whatsappNumber)) {
+      base.whatsappNumber = DEFAULT_SHIPPING.whatsappNumber;
+    }
     return base;
   }
 
   function save(part) {
-    if (part && state[part]) write(KEYS[part], state[part]);
-    else {
-      Object.keys(KEYS).forEach(function (key) {
-        if (key === 'version') return;
-        if (state[key]) write(KEYS[key], state[key]);
-      });
-    }
+    /* Returns false when localStorage refused the write, so a caller can report
+       the failure instead of assuming the change was stored. */
+    if (part && state[part]) return write(KEYS[part], state[part]);
+    var ok = true;
+    Object.keys(KEYS).forEach(function (key) {
+      if (key === 'version') return;
+      if (state[key] && !write(KEYS[key], state[key])) ok = false;
+    });
+    return ok;
   }
 
   /* ---------------------------------------------------------- derivations */
@@ -410,7 +453,9 @@
     for (var i = 0; i < state.banners.length; i += 1) {
       if (state.banners[i].active) return state.banners[i];
     }
-    return null;
+    /* Every banner was switched off. Falling back to the first one means the
+       shop page keeps a banner instead of silently showing a bare gap. */
+    return state.banners[0] || null;
   }
 
   /* ------------------------------------------------------------- mutations */
@@ -424,6 +469,8 @@
       category: slugify(payload.category),
       image: payload.image || IMAGE.fallback,
       gallery: (payload.gallery && payload.gallery.length ? payload.gallery : [payload.image || IMAGE.fallback]),
+      colorImages: payload.colorImages || (state.products[index] && state.products[index].colorImages) || {},
+      colorMasks: payload.colorMasks || (state.products[index] && state.products[index].colorMasks) || {},
       tag: payload.tag || '',
       colors: payload.colors && payload.colors.length ? payload.colors : DEFAULT_COLORS.slice(),
       price: num(payload.price),
@@ -442,18 +489,29 @@
       faqs: payload.faqs || []
     };
     record.sold = record.sold || num(payload.sold);
-    if (index >= 0 && state.products[index]) {
+    /* The old product record has to be kept until the write succeeds. If storage
+       is full, setItem throws and the in-memory list would keep the new product
+       while the page keeps the old one — a save that looks fine but silently
+       reverts on refresh. So build the candidate list, persist it, and only
+       commit to state once it is safely on disk. */
+    var editing = index >= 0 && state.products[index];
+    if (editing) {
       record.reviews = record.reviews.length ? record.reviews : state.products[index].reviews;
       record.faqs = record.faqs.length ? record.faqs : state.products[index].faqs;
-      state.products[index] = record;
     } else {
       var meta = META_POOL[state.products.length % META_POOL.length];
       record.reviews = record.reviews.length ? record.reviews : meta.reviews;
       record.faqs = record.faqs.length ? record.faqs : meta.faqs;
-      state.products.push(record);
-      index = state.products.length - 1;
     }
-    save('products');
+    var next = state.products.slice();
+    if (editing) {
+      next[index] = record;
+    } else {
+      next.push(record);
+      index = next.length - 1;
+    }
+    if (!write(KEYS.products, next)) return -1;
+    state.products = next;
     return index;
   }
 
@@ -830,6 +888,10 @@
     num: num,
     read: read,
     write: write,
+    /* Lets the admin panel show a persistent banner instead of a toast that
+       disappears, when a write to localStorage was refused. */
+    storageError: function () { return lastWriteError; },
+    onStorageError: onStorageError,
     state: state,
     save: save,
     sizeOf: sizeOf,

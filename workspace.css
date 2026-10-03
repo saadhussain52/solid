@@ -44,6 +44,28 @@
   gap: 14px
 }
 
+/* The orders search sits between the heading and the count, so it needs to be
+   allowed to shrink on a narrow screen rather than pushing the buttons off. */
+.page-search {
+  width: min(300px, 42vw);
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 10px 13px;
+  font-size: 11px;
+  outline: 0;
+  transition: border-color .2s, box-shadow .2s
+}
+
+.page-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(62, 107, 79, .12)
+}
+
+.page-search::placeholder {
+  color: var(--muted)
+}
+
 /* ---------------------------------------------------------- toolbar */
 
 .inventory-toolbar {

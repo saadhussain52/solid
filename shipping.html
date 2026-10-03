@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="admin.css" />
   <link rel="stylesheet" href="premium.css">
   <link rel="stylesheet" href="workspace.css">
-  <link rel="stylesheet" href="responsive.css">
+  <link rel="stylesheet" href="responsive.css"><link rel="stylesheet" href="theme-green.css">
   <style>
     /* Shipping settings cards */
     .ship-grid {
@@ -209,7 +209,7 @@
 <body class="admin-body admin-page">
   <aside class="admin-sidebar">
     <a class="wordmark admin-logo" href="admin.html" aria-label="Solids home"><img class="brand-logo"
-        src="solids-logo-transparent.png" alt="Solids"></a>
+        src="solids-logo-light.png" alt="Solids"></a>
     <p class="admin-label">WORKSPACE</p>
     <nav>
       <a class="admin-nav" href="admin.html">▦ <span>Overview</span></a>
@@ -223,7 +223,7 @@
       <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
       <div class="admin-user">
         <div class="avatar">SA</div>
-        <div><strong>Studio Admin</strong><small>solids@studio.pk</small></div>
+        <div><strong>Studio Admin</strong><small>solid.pk.official@gmail.com</small></div>
       </div>
     </div>
   </aside>
@@ -301,6 +301,16 @@
                 <label>Support email<input id="sf-supportEmail" type="email"></label>
                 <label>Support phone<input id="sf-supportPhone" type="tel"></label>
               </div>
+              <div class="ship-row-2">
+                <label>WhatsApp number (floating button)
+                  <input id="sf-whatsappNumber" type="tel" inputmode="numeric" placeholder="923412782443">
+                  <span class="ship-hint">Digits only, with country code and no plus. This is what the green WhatsApp button opens.</span>
+                </label>
+                <label>Instagram page URL
+                  <input id="sf-instagramUrl" type="url" placeholder="https://www.instagram.com/solids.pk.official">
+                  <span class="ship-hint">Linked from the footer and the header.</span>
+                </label>
+              </div>
               <label>Own-route cities (one per line)
                 <textarea id="sf-localCities" class="ship-cities"></textarea>
                 <span class="ship-hint" id="sf-localCities-hint">These cities are charged the delivery charge. Every
@@ -336,7 +346,7 @@
          straight read of the form plus one call. */
       const NUMERIC = ['deliveryFee', 'freeDeliveryOver', 'shippingFee'];
       const BANK = ['bankName', 'accountTitle', 'accountNumber', 'iban', 'bankCode', 'branch', 'instructions'];
-      const FIELDS = NUMERIC.concat(BANK, ['supportEmail', 'supportPhone']);
+      const FIELDS = NUMERIC.concat(BANK, ['supportEmail', 'supportPhone', 'whatsappNumber', 'instagramUrl']);
 
       const fill = config => {
         /* Older saved configs predate some of these keys, and assigning
@@ -350,6 +360,8 @@
         BANK.forEach(key => { document.querySelector('#sf-' + key).value = config.bankDetails[key] || ''; });
         document.querySelector('#sf-supportEmail').value = config.supportEmail || '';
         document.querySelector('#sf-supportPhone').value = config.supportPhone || '';
+        document.querySelector('#sf-whatsappNumber').value = config.whatsappNumber || '';
+        document.querySelector('#sf-instagramUrl').value = config.instagramUrl || '';
         document.querySelector('#sf-localCities').value = (config.localCities || []).join('\n');
         paintHints(config);
         preview();
@@ -444,6 +456,8 @@
         BANK.forEach(key => { config.bankDetails[key] = document.querySelector('#sf-' + key).value.trim(); });
         config.supportEmail = document.querySelector('#sf-supportEmail').value.trim();
         config.supportPhone = document.querySelector('#sf-supportPhone').value.trim();
+        config.whatsappNumber = document.querySelector('#sf-whatsappNumber').value.trim();
+        config.instagramUrl = document.querySelector('#sf-instagramUrl').value.trim();
         config.localCities = document.querySelector('#sf-localCities').value
           .split('\n').map(line => line.trim()).filter(Boolean);
 

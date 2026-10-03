@@ -54,7 +54,7 @@ const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Solids <onboarding@resend.dev>';
 /* Where the order alert goes. Optional. */
-const STUDIO_EMAIL = process.env.STUDIO_EMAIL || '';
+const STUDIO_EMAIL = process.env.STUDIO_EMAIL || 'solid.pk.official@gmail.com';
 
 const money = value => 'Rs. ' + Math.round(Number(value) || 0).toLocaleString('en-PK');
 /* --------------------------------------------------------------- storage */
@@ -158,7 +158,8 @@ const buildCustomerEmail = (order, req) => {
   /* The whole point of the email: a link they can click from any device. */
   const trackUrl = siteUrl('/track.html?id=' + encodeURIComponent(order.trackingId), req);
   const rows = (order.items || []).map(item =>
-    '  - ' + item.name + (item.size ? ' (size ' + item.size + ')' : '') +
+    '  - ' + item.name + ' (' + (item.color || 'colour not recorded') +
+    (item.size ? ', size ' + item.size : ', size not recorded') + ')' +
     ' x' + item.qty + ' — ' + money(Number(item.price) * Number(item.qty))
   ).join('\n');
   const charge = quote.waived ? 'Free' : money(quote.delivery || 0);
@@ -193,7 +194,8 @@ const buildCustomerEmail = (order, req) => {
 
   const itemsHtml = (order.items || []).map(item =>
     '<tr><td style="padding:6px 0;font-size:13px;color:#55504a">' +
-    escapeHtml(item.name) + (item.size ? ' · size ' + escapeHtml(item.size) : '') + ' × ' + escapeHtml(item.qty) +
+    escapeHtml(item.name) + ' · ' + escapeHtml(item.color || 'Colour not recorded') +
+    (item.size ? ' · size ' + escapeHtml(item.size) : ' · size not recorded') + ' × ' + escapeHtml(item.qty) +
     '</td><td style="padding:6px 0;text-align:right;font-size:13px;color:#292827">' +
     escapeHtml(money(Number(item.price) * Number(item.qty))) + '</td></tr>'
   ).join('');
@@ -232,7 +234,8 @@ const escapeAttr = value => escapeHtml(value).replace(/`/g, '&#96;');
 const buildStudioEmail = (order, req) => {
   const quote = order.shipping || {};
   const items = (order.items || []).map(item =>
-    item.name + ' x' + item.qty
+    item.name + ' (' + (item.color || 'colour not recorded') +
+    (item.size ? ', size ' + item.size : ', size not recorded') + ') x' + item.qty
   ).join(', ');
   const lines = [
     'New order from the storefront.',

@@ -76,20 +76,40 @@ body{
 /* the delivery banner belongs on every page, the home page included */
 .home-body>.announcement{display:block}
 
-/* On narrow phones the nav links plus the Search/Bag actions do not fit on
-   one row at the desktop gap. design.css loads after responsive.css, so the
-   shrink has to live here or this `gap:34px` would win at every width. */
+/* Keep navigation and actions together on the first mobile header row. The
+   logo remains centered on its own row below them. */
+@media(max-width:900px) {
+  .site-header .desktop-nav,
+  .catalog-header .desktop-nav {
+    flex:1 1 0;
+    gap:clamp(5px,2vw,12px);
+    font-size:clamp(8px,2.1vw,10px)
+  }
+
+  .site-header .header-actions,
+  .catalog-header .header-actions {
+    gap:clamp(7px,2vw,12px)
+  }
+
+  .site-header .header-link,
+  .catalog-header .header-link,
+  .site-header .cart-trigger {
+    font-size:clamp(9px,2.3vw,11px)
+  }
+}
+
 @media(max-width:420px) {
   .site-header .desktop-nav,
   .catalog-header .desktop-nav {
-    gap: 13px
+    gap:clamp(5px,1.7vw,7px)
   }
 }
 
 @media(max-width:360px) {
   .site-header .desktop-nav,
   .catalog-header .desktop-nav {
-    gap: 10px
+    font-size:8px;
+    letter-spacing:0
   }
 }
 
@@ -207,11 +227,12 @@ body{
 }
 
 .quick-add{
-  background:rgba(248,247,243,.92);
+  background:var(--accent);
   -webkit-backdrop-filter:blur(9px);
   backdrop-filter:blur(9px);
-  border-top:1px solid var(--hairline);
-  color:var(--ink);
+  border:0;
+  border-radius:0;
+  color:#fff;
   font-size:10px;
   font-weight:500;
   letter-spacing:1.3px;
@@ -219,7 +240,9 @@ body{
   padding:16px;
 }
 
-.quick-add span{color:var(--accent);padding-left:7px}
+.quick-add span{color:#fff;padding-left:7px}
+
+.quick-add:hover{background:var(--accent);filter:brightness(1.08)}
 
 .product-details{
   align-items:flex-start;
@@ -279,6 +302,24 @@ body{
 }
 
 .breadcrumbs{letter-spacing:.6px}
+
+/* The product page carries its own trail, filled in by app.js from the product
+   that was opened. Same muted serif look as the category breadcrumb, so the two
+   do not read as different components. */
+.product-breadcrumb{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  color:#aaa39a;
+  font:10px 'Libre Baskerville',serif;
+  letter-spacing:.6px;
+  margin-bottom:24px;
+}
+.product-breadcrumb a{transition:color .25s}
+.product-breadcrumb a:hover{color:var(--ink)}
+.product-breadcrumb span[aria-hidden]{color:#d2ccc3}
+.product-breadcrumb #product-breadcrumb{color:var(--ink)}
 
 .detail-description{
   font-family:'DM Sans',sans-serif;
@@ -356,6 +397,214 @@ body{
 .newsletter form:focus-within{border-color:var(--accent)}
 
 .newsletter input::placeholder{color:#8b857d}
+
+/* The phone line sits with the other footer links but is not a link itself —
+   the actual tap target is the floating WhatsApp button. */
+.footer-phone{display:block;margin-top:9px;font-size:11px;letter-spacing:.4px;color:#8b857d}
+
+/* --- product colour swatches ------------------------------------------------ */
+/* One chip per colour, the selected one ringed — the same visual language the
+   size buttons already use, so the two read as one control row. */
+.color-row{position:relative;margin:0 0 18px}
+
+.color-picker-toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:38px;
+  padding:7px 12px;
+  border:1px solid var(--hairline);
+  background:#fff;
+  color:var(--ink);
+  font:11px 'Libre Baskerville',serif;
+  cursor:pointer
+}
+
+.color-picker-toggle::after{
+  content:"";
+  width:11px;
+  height:11px;
+  border:1px solid var(--hairline);
+  border-radius:50%;
+  background:var(--selected-swatch,#a4a29e)
+}
+
+.color-picker-toggle[aria-expanded="true"]::before{
+  content:"";
+  position:absolute;
+  right:14px;
+  top:calc(100% + 4px);
+  width:8px;
+  height:8px;
+  border-top:1px solid var(--hairline);
+  border-left:1px solid var(--hairline);
+  background:#fff;
+  transform:rotate(45deg);
+  z-index:3
+}
+
+.color-options{
+  position:absolute;
+  z-index:2;
+  top:calc(100% + 8px);
+  left:0;
+  width:min(100%,280px);
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:8px;
+  max-height:150px;
+  overflow-y:auto;
+  padding:12px;
+  border:1px solid var(--hairline);
+  background:#fff;
+  box-shadow:0 8px 24px rgba(0,0,0,.12)
+}
+
+.color-options[hidden]{display:none}
+
+.color-swatch{
+  width:28px;
+  height:28px;
+  justify-self:center;
+  padding:0;
+  border:1px solid var(--hairline);
+  border-radius:50%;
+  background:var(--swatch);
+  cursor:pointer;
+  position:relative;
+  transition:transform .2s var(--ease-out),box-shadow .2s
+}
+
+/* A ring rather than a border change, because the swatch itself may be pale —
+   recolouring the edge would make a Bone chip look grey. */
+.color-swatch.selected{
+  box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px var(--accent);
+  transform:scale(1.06)
+}
+
+.color-swatch:hover{transform:scale(1.06)}
+
+.color-swatch:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* --- custom order request ------------------------------------------------ */
+.custom-order-page{
+  max-width:1080px;
+  margin:0 auto;
+  padding:62px 4.5vw 100px
+}
+
+.custom-order-intro{max-width:650px;margin:0 auto 38px;text-align:center}
+.custom-order-intro .eyebrow{color:var(--accent);letter-spacing:2px}
+.custom-order-intro h1{margin:12px 0;font:400 clamp(30px,4vw,46px)/1.2 'Libre Baskerville',serif}
+.custom-order-intro>p:last-child{color:var(--muted);font-size:14px;line-height:1.8}
+
+.custom-order-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(230px,.75fr);gap:28px;align-items:start}
+.custom-order-form,.custom-order-guide{padding:28px;border:1px solid var(--hairline);background:#fff}
+.custom-order-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.custom-order-fields label{display:grid;grid-template-columns:auto max-content;justify-content:start;gap:8px;color:var(--ink);font-size:12px;font-weight:600}
+.custom-order-fields label>span{display:inline;color:#a34d3d}
+.custom-order-fields label small{display:inline;margin-left:4px;color:var(--muted);font-weight:400}
+.custom-order-fields input,.custom-order-fields select,.custom-order-fields textarea{
+  grid-column:1/-1;
+  width:100%;
+  min-width:0;
+  padding:12px;
+  border:1px solid var(--hairline);
+  border-radius:0;
+  background:#fff;
+  color:var(--ink);
+  font:12px 'DM Sans',sans-serif
+}
+.custom-order-fields textarea{resize:vertical;line-height:1.6}
+.custom-order-fields input:focus,.custom-order-fields select:focus,.custom-order-fields textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+.custom-order-wide{grid-column:1/-1}
+.custom-order-submit{width:100%;justify-content:center;margin-top:22px}
+.custom-order-privacy{margin:12px 0 0;color:var(--muted);font-size:11px;line-height:1.7}
+.custom-order-guide{background:var(--paper)}
+.custom-order-guide .eyebrow{color:var(--accent);letter-spacing:1.5px}
+.custom-order-guide h2{font:400 21px/1.45 'Libre Baskerville',serif}
+.custom-order-guide ul{display:grid;gap:13px;padding-left:18px;color:#68645f;font-size:12px;line-height:1.7}
+.custom-order-guide>p:last-child{padding-top:15px;border-top:1px solid var(--hairline);color:#68645f;font-size:12px;line-height:1.7}
+
+@media(max-width:760px){
+  .custom-order-page{padding-top:38px}
+  .custom-order-layout{grid-template-columns:1fr}
+  .custom-order-form,.custom-order-guide{padding:21px}
+}
+
+@media(max-width:480px){
+  .custom-order-fields{grid-template-columns:1fr}
+  .custom-order-wide{grid-column:auto}
+}
+
+/* --- floating WhatsApp ----------------------------------------------------- */
+/* Fixed to the side so a customer can reach the studio from any page without
+   scrolling back to the footer. Pinned left, clear of the cart drawer. */
+.whatsapp-float{
+  position:fixed;
+  left:20px;
+  bottom:20px;
+  z-index:45;
+  width:52px;
+  height:52px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:#25d366;
+  color:#fff;
+  box-shadow:0 12px 30px rgba(24,21,18,.28);
+  transition:transform .25s var(--ease-out),box-shadow .25s
+}
+
+.whatsapp-float svg{width:27px;height:27px}
+
+.whatsapp-float:hover{transform:translateY(-3px);box-shadow:0 18px 38px rgba(24,21,18,.32)}
+
+/* The shop banner sits on a photo, so dark ink was unreadable on most
+   uploads. The copy is white now and a soft scrim goes over the image to
+   guarantee contrast whatever picture an admin picks. */
+.all-banner::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg,rgba(20,18,16,.42),rgba(20,18,16,.16) 62%,rgba(20,18,16,.34));
+  pointer-events:none
+}
+
+/* The hero copy used to be dark ink on a photo, which only read on very pale
+   uploads. It is white now, and the overlay becomes a dark scrim so the
+   contrast holds whatever image is uploaded. premium.css sets the dark values,
+   so it has to be overridden here rather than edited at the source. */
+.home-body .hero-overlay{
+  background:linear-gradient(90deg,rgba(20,18,16,.55),rgba(20,18,16,.22) 62%,rgba(20,18,16,.36))
+}
+
+.home-body .hero-copy{color:#fff;text-shadow:none}
+
+.home-body .hero-copy .eyebrow{color:#fff;opacity:.92}
+
+.home-body .hero h1{color:#fff;text-shadow:0 2px 30px rgba(20,18,16,.38)}
+
+.home-body .hero-copy p{color:rgba(255,255,255,.9);text-shadow:0 1px 12px rgba(20,18,16,.32)}
+
+.home-body .hero .button-light{background:#fff;color:#1f1f1e;border-color:#fff}
+
+.home-body .hero-index{color:#fff}
+
+/* z-index keeps the copy above the ::before scrim; both are positioned, so
+   without it the pseudo-element would paint over the text on some browsers. */
+.all-banner>div{color:#fff;z-index:1}
+
+.all-banner span{color:#fff;opacity:.9}
+
+.all-banner strong{color:#fff;text-shadow:0 2px 26px rgba(20,18,16,.4)}
+
+.all-banner em{color:#fff;opacity:.92}
+
+@media(max-width:560px){
+  .whatsapp-float{width:48px;height:48px;left:14px;bottom:14px}
+  .whatsapp-float svg{width:25px;height:25px}
+}
 
 /* --- buttons ------------------------------------------------------------- */
 .button{

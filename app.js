@@ -225,7 +225,7 @@
       }).join('');
     }
     grid.querySelectorAll('.quick-add').forEach(button => button.addEventListener('click', () => {
-      addToCart({ productIndex: Number(button.dataset.product), size: null, quantity: 1 });
+      window.location.href = `product.html?product=${Number(button.dataset.product)}`;
     }));
     updateProductCount(filter);
   }
@@ -237,7 +237,10 @@
 
   /* --------------------------------------------------------------- cart */
 
-  const cartKey = item => `${item.productIndex}::${item.size || ''}`;
+  /* A bag line is a product in a size in a colour — the same shirt in Bone and in
+     Black are two different things to pick, pack and ship, so the colour is part
+     of the key rather than a label that gets overwritten. */
+  const cartKey = item => `${item.productIndex}::${item.size || ''}::${item.color || ''}`;
 
   function addToCart(item) {
     const product = Store.state.products[item.productIndex];
@@ -254,7 +257,7 @@
     const available = item.size ? Store.stockFor(product, item.size) : Store.totalStock(product);
     if (inBag >= available) { notify(`Only ${available} left in ${item.size || product.name}`); return; }
     if (existing) existing.quantity += 1;
-    else cart.push({ productIndex: item.productIndex, size: item.size, quantity: 1 });
+    else cart.push({ productIndex: item.productIndex, size: item.size, color: item.color || '', quantity: 1 });
     saveCart();
     updateCart();
     openDrawer('cart-drawer');
@@ -299,7 +302,7 @@
         <img src="${escapeHtml(entry.product.image)}" alt="${escapeHtml(entry.product.name)}">
         <div>
           <h4>${escapeHtml(entry.product.name)}</h4>
-          <p>${entry.line.size ? `Size ${escapeHtml(entry.line.size)} · ` : ''}${money(entry.price)} × ${entry.line.quantity}</p>
+          <p>${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : `<a href="product.html?product=${entry.line.productIndex}">Choose colour</a> · `}${entry.line.size ? `Size ${escapeHtml(entry.line.size)} · ` : ''}${money(entry.price)} × ${entry.line.quantity}</p>
           <div class="cart-quantity">
             <button data-cart-dec="${index}" aria-label="Decrease quantity">−</button>
             <span>${entry.line.quantity}</span>
@@ -545,7 +548,7 @@
         <img src="${escapeAttr(entry.product.image || '')}" alt="">
         <div>
           <strong>${escapeHtml(entry.product.name)}</strong>
-          <span>${escapeHtml(entry.line.size || 'One size')} · Qty ${entry.line.quantity}</span>
+          <span>${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : 'Colour not selected · '}${escapeHtml(entry.line.size || 'Size not selected')} · Qty ${entry.line.quantity}</span>
         </div>
         <em>${money(entry.total)}</em>
       </div>`).join('');
@@ -595,12 +598,21 @@
     event.preventDefault();
     const { lines, city, quote } = quoteForCheckout(modal);
     if (!lines.length) { notify('Your bag is empty'); return; }
+    const missingColor = lines.find(entry => !entry.line.color);
+    if (missingColor) {
+      notify('Choose a colour for each item before placing your order');
+      modal.classList.remove('show');
+      closeDrawers();
+      openDrawer('cart-drawer');
+      return;
+    }
     if (!city) { notify('Please choose your delivery city'); modal.querySelector('#co-city').focus(); return; }
 
     const payment = currentPaymentMethod(modal);
     const email = modal.querySelector('#co-email').value.trim();
     const items = lines.map(entry => ({
       name: entry.product.name,
+      color: entry.line.color || '',
       size: entry.line.size || '',
       qty: entry.line.quantity,
       price: entry.price
@@ -719,7 +731,7 @@
       `Payment:     ${payment}`,
       '',
       'Items:',
-      ...order.items.map(item => `  ${item.qty} × ${item.name} (${item.size || 'One size'}) — ${money(item.price * item.qty)}`),
+      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.color || 'Colour not recorded', item.size || 'Size not recorded'].join(' / ')}) — ${money(item.price * item.qty)}`),
       '',
       `Subtotal: ${money(quote.subtotal || 0)}`,
       `${chargeLabel}${order.city ? ' (' + order.city + ')' : ''}: ${chargeAmount}`,
@@ -738,6 +750,8 @@
       `Tracking ID: ${order.trackingId}`,
       `Placed: ${order.date}`,
       `Payment: ${payment}`,
+      'Items:',
+      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.color || 'Colour not recorded', item.size || 'Size not recorded'].join(' / ')}) — ${money(item.price * item.qty)}`),
       `Total: ${money(total)} PKR`,
       `Track: ${trackUrl}`
     ].join('\n');
@@ -856,7 +870,7 @@
         ${trackBlock}
 
         <div class="confirm-items">
-          ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${escapeHtml(item.size || 'One size')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
+          ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${escapeHtml(item.color || 'Colour not recorded')} · ${escapeHtml(item.size || 'Size not recorded')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
         </div>
 
         <div class="co-charges">
@@ -937,7 +951,25 @@
     event.target.innerHTML = '<p style="color:#d9c1ae;font-size:12px">You are on the list. Welcome in.</p>';
   });
 
-  /* ------------------------------------------------- product detail page */
+  /* ------------------------------------------------------- product detail page */
+
+  const COLOR_PALETTE = [
+    ['Snow', '#fffafa'], ['Ivory', '#f4efe4'], ['Bone', '#e8e2d6'], ['Oat', '#ded2bf'], ['Sand', '#d6c3a5'],
+    ['Beige', '#d8c3a5'], ['Taupe', '#aa9985'], ['Mushroom', '#a39283'], ['Mocha', '#806654'], ['Cocoa', '#65483c'],
+    ['Chocolate', '#4a3026'], ['Espresso', '#33231d'], ['Black', '#1b1a19'], ['Charcoal', '#3b3a38'], ['Slate', '#62666a'],
+    ['Ash Grey', '#858585'], ['Grey', '#a4a29e'], ['Silver', '#c3c1bc'], ['Cloud', '#d7d8d6'], ['White', '#f7f6f3'],
+    ['Stone', '#b6ad9e'], ['Khaki', '#b3a685'], ['Camel', '#b58d62'], ['Tan', '#c9a882'], ['Caramel', '#ad754b'],
+    ['Rust', '#a4552f'], ['Terracotta', '#c66b4e'], ['Burnt Orange', '#b95424'], ['Orange', '#e17b32'], ['Apricot', '#edaa78'],
+    ['Peach', '#f0b6a1'], ['Coral', '#e77c70'], ['Red', '#b4403a'], ['Brick', '#913c35'], ['Cherry', '#9e2038'],
+    ['Burgundy', '#5d2733'], ['Maroon', '#71333d'], ['Wine', '#6e3045'], ['Berry', '#8e3e65'], ['Fuchsia', '#c43b83'],
+    ['Hot Pink', '#e84a91'], ['Pink', '#d7a8ad'], ['Blush', '#e8c1bd'], ['Rose', '#c98b93'], ['Dusty Rose', '#bd8f91'],
+    ['Mauve', '#a77d8e'], ['Lilac', '#b3a3c2'], ['Lavender', '#a995c8'], ['Violet', '#76538c'], ['Purple', '#5f4a6b'],
+    ['Plum', '#59364f'], ['Indigo', '#43436b'], ['Navy', '#26303f'], ['Midnight Blue', '#17243a'], ['Royal Blue', '#3559a5'],
+    ['Blue', '#4a6b8a'], ['Sky Blue', '#80b6d5'], ['Powder Blue', '#b4d0db'], ['Teal', '#287f83'], ['Turquoise', '#45b7ad'],
+    ['Aqua', '#8acbc4'], ['Mint', '#a4d2ba'], ['Sage', '#a8b39a'], ['Olive', '#5f6b4a'], ['Moss', '#65734c'],
+    ['Forest Green', '#315b45'], ['Green', '#4f6b52'], ['Emerald', '#2e8065'], ['Lime', '#a9b94a'], ['Chartreuse', '#b4b846'],
+    ['Mustard', '#c39a3c'], ['Yellow', '#e3c64f'], ['Lemon', '#f0df76'], ['Gold', '#c2a25a'], ['Copper', '#a96a42']
+  ];
 
   const detailImage = document.querySelector('#detail-image');
   if (detailImage) {
@@ -962,6 +994,73 @@
         const active = document.querySelector('.size-options button.selected');
         return active ? active.dataset.size : (firstAvailable ? firstAvailable.label : (sizes[0] ? sizes[0].label : ''));
       };
+
+      /* The storefront owns its fixed palette; admin product colour text does
+         not limit which colours a customer can select. */
+      const colors = COLOR_PALETTE.map(([name]) => name);
+      const colorRow = document.querySelector('#color-options');
+      const colorLabel = document.querySelector('#selected-color');
+      const colorField = colorRow?.closest('.color-row');
+      const colorToggle = document.createElement('button');
+      colorToggle.type = 'button';
+      colorToggle.className = 'color-picker-toggle';
+      colorToggle.id = 'color-picker-toggle';
+      colorToggle.setAttribute('aria-expanded', 'false');
+      colorToggle.setAttribute('aria-controls', 'color-options');
+      if (colorField && colorRow && colorLabel) {
+        const caption = document.createElement('span');
+        caption.textContent = 'Choose colour: ';
+        const oldLabel = colorLabel.parentElement;
+        colorToggle.append(caption, colorLabel);
+        oldLabel.remove();
+        colorField.insertBefore(colorToggle, colorRow);
+        colorRow.hidden = true;
+        colorField.querySelector('.color-preview-note')?.remove();
+      }
+      if (colorRow) {
+        colorRow.innerHTML = COLOR_PALETTE.map(([color, hex]) =>
+          `<button type="button" class="color-swatch" data-color="${escapeAttr(color)}" title="${escapeAttr(color)}" aria-label="${escapeAttr(color)}" style="--swatch:${hex}"></button>`).join('');
+      }
+      const selectedColor = () => {
+        const active = colorRow && colorRow.querySelector('.color-swatch.selected');
+        if (active) return active.dataset.color;
+        return colors[0];
+      };
+      const paintColors = () => {
+        const chosen = selectedColor();
+        if (colorLabel) colorLabel.textContent = chosen || '—';
+        if (colorToggle) colorToggle.style.setProperty('--selected-swatch', COLOR_PALETTE.find(([name]) => name === chosen)?.[1] || '#a4a29e');
+        colorRow?.querySelectorAll('.color-swatch').forEach(button => {
+          button.classList.toggle('selected', button.dataset.color === chosen);
+        });
+      };
+      const closeColorPicker = () => {
+        if (!colorRow || !colorToggle) return;
+        colorRow.hidden = true;
+        colorToggle.setAttribute('aria-expanded', 'false');
+      };
+      if (colorRow) {
+        colorRow.addEventListener('click', event => {
+          const button = event.target.closest('.color-swatch');
+          if (!button) return;
+          colorRow.querySelectorAll('.color-swatch').forEach(item => item.classList.remove('selected'));
+          button.classList.add('selected');
+          paintColors();
+          closeColorPicker();
+        });
+        colorToggle?.addEventListener('click', () => {
+          const opening = colorRow.hidden;
+          colorRow.hidden = !opening;
+          colorToggle.setAttribute('aria-expanded', String(opening));
+        });
+        document.addEventListener('click', event => {
+          if (!event.target.closest('.color-row')) closeColorPicker();
+        });
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape') closeColorPicker();
+        });
+        paintColors();
+      }
 
       const update = () => {
         const label = selectedSize();
@@ -1034,12 +1133,12 @@
       document.querySelector('.detail-add')?.addEventListener('click', () => {
         const label = selectedSize();
         if (Store.stockFor(product, label) <= 0) { notify(label + ' is out of stock'); return; }
-        addToCart({ productIndex: index, size: label, quantity: 1 });
+        addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });
       });
       document.querySelector('.buy-now')?.addEventListener('click', () => {
         const label = selectedSize();
         if (Store.stockFor(product, label) <= 0) { notify(label + ' is out of stock'); return; }
-        addToCart({ productIndex: index, size: label, quantity: 1 });
+        addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });
         window.setTimeout(openCheckout, 350);
       });
 
@@ -1096,7 +1195,7 @@
             </article>`;
           }).join('');
           relatedGrid.querySelectorAll('.quick-add').forEach(button => button.addEventListener('click', () => {
-            addToCart({ productIndex: Number(button.dataset.product), size: null, quantity: 1 });
+            window.location.href = `product.html?product=${Number(button.dataset.product)}`;
           }));
         } else {
           relatedHost.hidden = true;
@@ -1107,6 +1206,118 @@
     }
   }
 
+  /* ------------------------------------------------- contact & shop banner */
+
+  /* The banner above the product grid used to be hard-coded in the HTML, so the
+     one an admin set as active in "Categories & banners" never showed up on the
+     shop page. It is rendered here from the store instead — the markup below is
+     the same shape the page shipped with, so the existing CSS still applies. */
+  const renderShopBanner = () => {
+    const host = document.querySelector('.all-banner');
+    if (!host) return;
+    const banner = Store.activeBanner();
+    if (!banner) return;
+    const image = banner.image || Store.IMAGE.banner;
+    host.innerHTML = `
+      <img src="${escapeAttr(image)}" alt="${escapeAttr(banner.title || 'Shop the edit')}">
+      <div>
+        <span>Solids</span>
+        <strong>${escapeHtml(banner.title || '')}</strong>
+        ${banner.subtitle ? `<em>${escapeHtml(banner.subtitle)}</em>` : ''}
+      </div>`;
+  };
+
+  /* The floating WhatsApp button and the footer phone line both read the same
+     admin-editable number, so a change in the admin panel reaches the whole
+     site at once. */
+  const applyContact = () => {
+    const config = Store.state.shipping;
+    const digits = String(config.whatsappNumber || '').replace(/\D/g, '');
+    if (!digits) return;
+
+    const pretty = '+' + digits.replace(/^(\d{2})(\d{3})(\d{3,})(\d{4})$/, '$1 $2 $3 $4');
+
+    document.querySelectorAll('[data-footer-phone]').forEach(node => {
+      node.textContent = 'WhatsApp: ' + pretty;
+    });
+    document.querySelectorAll('[data-instagram]').forEach(node => {
+      if (config.instagramUrl) node.href = config.instagramUrl;
+    });
+
+    let button = document.querySelector('.whatsapp-float');
+    if (!button) {
+      button = document.createElement('a');
+      button.className = 'whatsapp-float';
+      button.target = '_blank';
+      button.rel = 'noopener';
+      button.setAttribute('aria-label', 'Chat with us on WhatsApp');
+      button.innerHTML = `
+        <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M16 3C8.83 3 3 8.83 3 16c0 2.29.6 4.44 1.67 6.29L3 29l6.87-1.64A12.94 12.94 0 0 0 16 29c7.17 0 13-5.83 13-13S23.17 3 16 3Zm0 23.6c-2.06 0-4.06-.59-5.77-1.7l-.41-.27-4.08.98.98-3.98-.28-.41a10.55 10.55 0 0 1-1.62-5.62c0-5.87 4.78-10.65 10.66-10.65S26.6 8.55 26.6 14.4 21.86 26.6 16 26.6Zm5.8-7.99c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.71.16-.21.31-.82 1.02-1 1.23-.19.21-.37.24-.69.08-.32-.16-1.34-.5-2.56-1.58-.94-.84-1.58-1.88-1.77-2.2-.18-.32-.02-.49.14-.65.15-.15.32-.37.48-.56.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.71-1.73-.98-2.36-.26-.62-.52-.54-.71-.55h-.61c-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.66s1.14 3.08 1.3 3.29c.16.21 2.25 3.43 5.45 4.81.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.88-.77 2.14-1.51.27-.74.27-1.38.19-1.51-.08-.13-.29-.21-.61-.37Z"/>
+        </svg>`;
+      document.body.appendChild(button);
+    }
+    button.href = `https://wa.me/${digits}`;
+  };
+
+  const setupCustomOrderForm = () => {
+    const form = document.querySelector('#custom-order-form');
+    if (!form) return;
+
+    const garmentSelect = form.querySelector('#custom-garment');
+    Store.state.products.forEach(product => {
+      const option = document.createElement('option');
+      option.value = product.name;
+      option.textContent = product.name;
+      garmentSelect.appendChild(option);
+    });
+
+    const colorSelect = form.querySelector('#custom-color');
+    COLOR_PALETTE.forEach(([name]) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      colorSelect.appendChild(option);
+    });
+
+    const deadline = form.querySelector('[name="deadline"]');
+    const today = new Date();
+    deadline.min = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const digits = String(Store.state.shipping.whatsappNumber || '').replace(/\D/g, '');
+      if (!/^\d{8,15}$/.test(digits)) {
+        notify('WhatsApp contact is unavailable. Please contact the studio directly.');
+        return;
+      }
+
+      const values = new FormData(form);
+      const message = [
+        'Hello Solids! I would like to request a custom order.',
+        '',
+        `Name: ${values.get('name')}`,
+        `WhatsApp: ${values.get('phone')}`,
+        `Email: ${values.get('email') || 'Not provided'}`,
+        `Garment/product: ${values.get('garment')}`,
+        `Preferred colour: ${values.get('color') || 'Not sure yet'}`,
+        `Usual size: ${values.get('size') || 'Not provided'}`,
+        `Measurements: ${values.get('measurements') || 'Not provided'}`,
+        `Custom details: ${values.get('details')}`,
+        `Budget: ${values.get('budget') || 'Not provided'}`,
+        `Needed by: ${values.get('deadline') || 'Flexible'}`
+      ].join('\n');
+
+      const link = document.createElement('a');
+      link.href = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+  };
+
   /* --------------------------------------------------------------- boot */
 
   syncFilterButtons();
@@ -1114,6 +1325,9 @@
   applyContent();
   renderCollections();
   updateCart();
+  renderShopBanner();
+  applyContact();
+  setupCustomOrderForm();
 
   const requested = new URLSearchParams(window.location.search).get('category');
   currentFilter = requested && requested !== 'all' ? requested : 'all';

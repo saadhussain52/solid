@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customize an order | Solids</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="catalog.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="stylesheet" href="responsive.css">
+  <link rel="stylesheet" href="motion.css">
+  <link rel="stylesheet" href="design.css">
+  <link rel="stylesheet" href="theme-green.css">
+  <script src="motion.js" defer></script>
+</head>
+<body class="catalog-body">
+  <div class="announcement">OUR ORDER DELIVERY TIMELINE IS 4–7 WORKING DAYS</div>
+  <header class="site-header catalog-header">
+    <nav class="desktop-nav">
+      <a href="index.html">Home</a>
+      <a href="all.html">Shop</a>
+      <a class="active" href="customize.html">Customize</a>
+      <li class="nav-dropdown">
+        <a href="index.html#collections" aria-haspopup="true" aria-expanded="false">Collections <span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-dropdown-menu" id="nav-collections-menu"></div>
+      </li>
+    </nav>
+    <a class="wordmark" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-transparent.png" alt="Solids — No prints, just style"></a>
+    <div class="header-actions">
+      <button class="header-link search-trigger">Search</button>
+      <button class="cart-trigger" aria-label="Open cart">Bag <span id="cart-count">0</span></button>
+    </div>
+  </header>
+
+  <main class="custom-order-page">
+    <section class="custom-order-intro">
+      <p class="eyebrow">MADE PERSONAL</p>
+      <h1>Your idea, made for you.</h1>
+      <p>Tell us what you have in mind. We’ll open WhatsApp with your request so our studio can confirm the details, availability and price with you.</p>
+    </section>
+    <div class="custom-order-layout">
+      <form class="custom-order-form" id="custom-order-form">
+        <div class="custom-order-fields">
+          <label>Your name <span>*</span><input name="name" autocomplete="name" required maxlength="100" placeholder="Full name"></label>
+          <label>WhatsApp number <span>*</span><input name="phone" type="tel" autocomplete="tel" required maxlength="30" placeholder="+92 300 1234567"></label>
+          <label>Email <small>Optional</small><input name="email" type="email" autocomplete="email" maxlength="160" placeholder="you@example.com"></label>
+          <label>What would you like made? <span>*</span>
+            <select name="garment" id="custom-garment" required>
+              <option value="">Choose a product or design</option>
+              <option value="Custom design / another garment">Custom design / another garment</option>
+            </select>
+          </label>
+          <label>Preferred colour <small>Optional</small>
+            <select name="color" id="custom-color">
+              <option value="">Not sure yet</option>
+            </select>
+          </label>
+          <label>Usual size <small>Optional</small>
+            <select name="size">
+              <option value="">Not sure / custom measurements</option>
+              <option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option>
+              <option>XXL</option><option>One size</option>
+            </select>
+          </label>
+          <label class="custom-order-wide">Measurements <small>Optional</small>
+            <textarea name="measurements" rows="3" maxlength="1200" placeholder="Add measurements in inches or cm, such as bust, waist, hip, and length."></textarea>
+          </label>
+          <label class="custom-order-wide">What changes or details do you want? <span>*</span>
+            <textarea name="details" rows="5" required maxlength="2000" placeholder="Describe the fit, fabric, length, sleeves, or any other details you want us to know."></textarea>
+          </label>
+          <label>Budget <small>Optional</small><input name="budget" maxlength="80" placeholder="For example, Rs. 10,000–15,000"></label>
+          <label>When do you need it? <small>Optional</small><input name="deadline" type="date"></label>
+        </div>
+        <button class="button button-dark custom-order-submit" type="submit">SEND REQUEST ON WHATSAPP <span>↗</span></button>
+        <p class="custom-order-privacy">Your request opens in WhatsApp for you to review and send. Nothing is ordered until our team confirms the price and details.</p>
+      </form>
+      <aside class="custom-order-guide">
+        <p class="eyebrow">WHAT TO SHARE</p>
+        <h2>A few details help us get it right.</h2>
+        <ul>
+          <li>The garment or existing product you want customized</li>
+          <li>Your preferred colour, size, and measurements if you have them</li>
+          <li>The changes you have in mind, plus your budget and timing</li>
+        </ul>
+        <p>Have a reference photo or sketch? Attach it in WhatsApp after the message opens.</p>
+      </aside>
+    </div>
+  </main>
+
+  <div class="search-panel" id="search-panel"><button class="close-panel">×</button><p class="eyebrow">SEARCH THE EDIT</p><input id="search-input" type="search" placeholder="Search products..."><div id="search-results"></div></div>
+  <div class="cart-drawer" id="cart-drawer"><div class="drawer-head"><h3>Your bag <span id="drawer-count">0</span></h3><button class="close-panel">×</button></div><div id="cart-items" class="cart-items"><p class="empty-state">Your bag is currently empty.</p></div><div class="cart-footer"><div><span>Subtotal</span><strong id="cart-total">Rs. 0</strong></div><button class="button button-dark checkout-button">Checkout <span>↗</span></button></div></div>
+  <div class="scrim"></div>
+  <script src="store-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
