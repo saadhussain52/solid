@@ -134,10 +134,14 @@
 
     const accept = async file => {
       if (!file || !file.type.startsWith('image/')) { toast('Please choose an image file'); return; }
-      const data = await readImage(file);
-      hidden.value = data;
-      paint(data);
-      onChange(data);
+      try {
+        const data = await readImage(file);
+        hidden.value = data;
+        paint(data);
+        onChange(data);
+      } catch (error) {
+        toast('Could not read that image. Please try another file.');
+      }
     };
 
     wrap.querySelector('[data-pick]').addEventListener('click', () => fileInput.click());
@@ -163,6 +167,34 @@
   }
 
   /* --------------------------------------------------------- product editor */
+
+  async function cloudifyProductImages(product, cache) {
+    const upload = async source => {
+      if (typeof source !== 'string' || !source.startsWith('data:image/')) return source;
+      if (!cache.has(source)) cache.set(source, await Store.api.uploadImage(source));
+      return cache.get(source);
+    };
+    product.image = await upload(product.image);
+    product.gallery = await Promise.all((product.gallery || []).map(upload));
+    for (const field of ['colorImages', 'colorMasks']) {
+      const images = product[field] || {};
+      for (const key of Object.keys(images)) images[key] = await upload(images[key]);
+      product[field] = images;
+    }
+    return product;
+  }
+
+  async function cloudifyProducts(products) {
+    const cache = new Map();
+    for (const product of products) await cloudifyProductImages(product, cache);
+    return products;
+  }
+
+  function clearLocalProductCache() {
+    try { localStorage.removeItem(Store.KEYS.products); } catch (error) {
+      throw new Error('Products were saved to Railway, but this browser could not clear its old product-image cache.');
+    }
+  }
 
   const SIZE_PRESETS = Store.SIZE_PRESETS;
 
@@ -371,8 +403,9 @@
     $$('[data-close-editor]', modal).forEach(button => button.addEventListener('click', () => modal.classList.remove('show')));
     modal.addEventListener('click', event => { if (event.target === modal) modal.classList.remove('show'); });
 
-    $('#product-editor-form', modal).addEventListener('submit', event => {
+    $('#product-editor-form', modal).addEventListener('submit', async event => {
       event.preventDefault();
+      if (!Store.api.productsOnline) { toast('The shared product server is unavailable. Nothing was saved.'); return; }
       const sizes = readSizes(modal);
       if (!sizes.length) { toast('Add at least one size'); return; }
       const image = mainPicker.value;
@@ -387,19 +420,38 @@
         tag: $('[data-field="tag"]', modal).value.trim(),
         colors: $('[data-field="colors"]', modal).value.split(',').map(item => item.trim()).filter(Boolean),
         image,
-        gallery: gallery.length ? gallery : [image],
+        gallery: [image, ...gallery.filter(source => source !== image)],
+        colorImages: index >= 0 ? Store.state.products[index].colorImages : {},
+        colorMasks: index >= 0 ? Store.state.products[index].colorMasks : {},
         sizes
       };
-      const saved = Store.upsertProduct(payload);
-      if (saved < 0) {
-        /* Storage refused the write — the product is NOT saved. Keep the editor
-           open so nothing the admin typed is lost, and say what went wrong. */
-        toast(Store.storageError() || 'Could not save the product');
+      const submit = $('button[type="submit"]', modal);
+      if (submit) submit.disabled = true;
+      try {
+        await cloudifyProductImages(payload, new Map());
+      } catch (error) {
+        toast(error.message || 'Could not upload product images.');
+        if (submit) submit.disabled = false;
         return;
       }
-      modal.classList.remove('show');
-      toast(index >= 0 ? 'Product updated' : 'Product added');
-      document.dispatchEvent(new CustomEvent('store:changed', { detail: { type: 'product' } }));
+      const saved = Store.upsertProduct(payload);
+      if (saved < 0) {
+        toast(Store.storageError() || 'Could not save the product');
+        if (submit) submit.disabled = false;
+        return;
+      }
+      try {
+        await Store.api.saveProducts(Store.state.products, false);
+        clearLocalProductCache();
+        modal.classList.remove('show');
+        toast(index >= 0 ? 'Product updated' : 'Product added');
+        document.dispatchEvent(new CustomEvent('store:changed', { detail: { type: 'product' } }));
+      } catch (error) {
+        try { await Store.api.loadAdminProducts(); } catch (reloadError) { console.error('[products] restore after failed save:', reloadError); }
+        toast(error.message || 'Could not save the product to Railway.');
+      } finally {
+        if (submit) submit.disabled = false;
+      }
     });
 
     modal.classList.add('show');
@@ -879,13 +931,22 @@ function filterOrders(term) {
     }).join('') || '<p class="muted">No products match this view.</p>';
 
     $$('[data-edit-product]', list).forEach(button => button.addEventListener('click', () => openProductEditor(Number(button.dataset.editProduct))));
-    $$('[data-delete-product]', list).forEach(button => button.addEventListener('click', () => {
+    $$('[data-delete-product]', list).forEach(button => button.addEventListener('click', async () => {
+      if (!Store.api.productsOnline) { toast('The shared product server is unavailable. Nothing was deleted.'); return; }
       const index = Number(button.dataset.deleteProduct);
       if (!confirm('Delete ' + Store.state.products[index].name + ' from the catalogue?')) return;
-      Store.removeProduct(index);
-      renderProductsList();
-      initShell();
-      toast('Product deleted');
+      if (!Store.removeProduct(index)) { toast(Store.storageError() || 'Could not delete product.'); return; }
+      try {
+        await Store.api.saveProducts(Store.state.products, false);
+        clearLocalProductCache();
+        renderProductsList();
+        initShell();
+        toast('Product deleted');
+      } catch (error) {
+        try { await Store.api.loadAdminProducts(); } catch (reloadError) { console.error('[products] restore after failed delete:', reloadError); }
+        renderProductsList();
+        toast(error.message || 'Could not delete product from Railway.');
+      }
     }));
 
     const counter = $('#products-page-count');
@@ -941,7 +1002,26 @@ function filterOrders(term) {
   initShell();
   storageBanner();
   const boot = PAGES[PAGE];
-  if (boot) boot();
+  Store.api.productsReady
+    .then(result => {
+      if (!result.online) throw new Error('Cannot reach the Railway product API. Product changes are disabled.');
+      return Store.api.loadAdminProducts();
+    })
+    .then(async result => {
+      if (!result.configured) {
+        const products = await cloudifyProducts(JSON.parse(JSON.stringify(Store.state.products)));
+        Store.state.products = products;
+        await Store.api.saveProducts(products, true);
+      }
+      clearLocalProductCache();
+      initShell();
+      if (boot) boot();
+    })
+    .catch(error => {
+      initShell();
+      if (boot) boot();
+      toast(error.message || 'Could not load the shared product catalogue.');
+    });
 
   // convenience: expose a re-render hook
   window.refreshAdmin = () => { initShell(); const page = PAGES[PAGE]; if (page) page(); };

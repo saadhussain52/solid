@@ -6,8 +6,8 @@
  *   1. emailing the customer their tracking link
  *   2. tracking an order from a different device (the browser's own copy of an
  *      order lives in localStorage, which does not travel with an email)
- * So this serves the static files AND exposes a small JSON API backed by a file
- * on disk.
+ * So this serves the static files AND exposes JSON APIs for orders and the
+ * shared product catalogue, backed by files in the configured data directory.
  *
  * Usage:
  *   node server.js            -> http://localhost:5173
@@ -55,6 +55,9 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Solids <onboarding@resend.dev>';
 /* Where the order alert goes. Optional. */
 const STUDIO_EMAIL = process.env.STUDIO_EMAIL || 'solid.pk.official@gmail.com';
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 
 const money = value => 'Rs. ' + Math.round(Number(value) || 0).toLocaleString('en-PK');
 /* --------------------------------------------------------------- storage */
@@ -66,6 +69,7 @@ const dataDir = process.env.DATA_DIR
   ? path.resolve(root, process.env.DATA_DIR)
   : path.join(root, 'data');
 const ordersFile = path.join(dataDir, 'orders.json');
+const productsFile = path.join(dataDir, 'products.json');
 
 /* Orders live in one JSON file. Reads are cached in memory and every write
    goes to a temp file first, then replaces the original, so a crash mid-write
@@ -90,6 +94,57 @@ const saveOrders = orders => {
   fs.renameSync(temp, ordersFile);
   ordersCache = orders;
 };
+
+let productsCache;
+
+const loadProducts = () => {
+  if (productsCache !== undefined) return productsCache;
+  try {
+    productsCache = JSON.parse(fs.readFileSync(productsFile, 'utf8'));
+    if (!Array.isArray(productsCache)) throw new Error('Product data is not an array');
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+  return productsCache;
+};
+
+const saveProducts = products => {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const temp = productsFile + '.tmp';
+  fs.writeFileSync(temp, JSON.stringify(products, null, 2));
+  fs.renameSync(temp, productsFile);
+  productsCache = products;
+};
+
+const requireAdmin = (req, res) => {
+  const expected = process.env.ADMIN_KEY || '';
+  const supplied = String(req.headers['x-admin-key'] || '');
+  if (!expected) {
+    json(res, 503, { ok: false, error: 'Product editing is locked. Set ADMIN_KEY in Railway variables.' });
+    return false;
+  }
+  const expectedBuffer = Buffer.from(expected);
+  const suppliedBuffer = Buffer.from(supplied);
+  if (expectedBuffer.length !== suppliedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, suppliedBuffer)) {
+    json(res, 401, { ok: false, error: 'Admin key is incorrect.' });
+    return false;
+  }
+  return true;
+};
+
+const publicProducts = products => products && products.map(product => {
+  const visible = { ...product };
+  delete visible.cost;
+  if (Array.isArray(visible.sizes)) {
+    visible.sizes = visible.sizes.map(size => {
+      const visibleSize = { ...size };
+      delete visibleSize.cost;
+      return visibleSize;
+    });
+  }
+  return visible;
+});
 
 /* Look up by tracking ID, order number, or the email it was sent to — the
    three things a customer actually has in front of them. */
@@ -325,12 +380,12 @@ const json = (res, status, body) => {
   res.end(JSON.stringify(body));
 };
 
-const readBody = req => new Promise((resolve, reject) => {
+const readBody = (req, limit = 200000) => new Promise((resolve, reject) => {
   let raw = '';
   /* Cap the body so a malformed or hostile request cannot grow unbounded. */
   req.on('data', chunk => {
     raw += chunk;
-    if (raw.length > 200000) {
+    if (raw.length > limit) {
       reject(new Error('Payload too large'));
       req.destroy();
     }
@@ -430,6 +485,28 @@ const handleCreate = async (req, res) => {
 
   orders.unshift(order);
   saveOrders(orders);
+  try {
+    const products = loadProducts();
+    if (products) {
+      order.items.forEach(item => {
+        const product = products.find(candidate => candidate.name === item.name);
+        if (!product) return;
+        const size = (product.sizes || []).find(candidate => candidate.label === item.size);
+        const quantity = Math.max(0, Number(item.qty) || 1);
+        if (size) {
+          size.stock = Math.max(0, (Number(size.stock) || 0) - quantity);
+          size.sold = (Number(size.sold) || 0) + quantity;
+          product.sold = (product.sizes || []).reduce((sum, entry) => sum + (Number(entry.sold) || 0), 0);
+        } else {
+          product.stock = Math.max(0, (Number(product.stock) || 0) - quantity);
+          product.sold = (Number(product.sold) || 0) + quantity;
+        }
+      });
+      saveProducts(products);
+    }
+  } catch (error) {
+    console.error('[products] stock update failed for ' + order.id + ':', error.message);
+  }
 
   /* Saved first, emailed second — a mail outage must never lose the order. */
   const mail = await mailCustomer(order, req);
@@ -548,7 +625,7 @@ const serveFile = (res, filePath) => {
 
 /* -------------------------------------------------------------------- boot */
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = req.url || '/';
   const method = req.method || 'GET';
 
@@ -573,6 +650,85 @@ const server = http.createServer((req, res) => {
         dataWritable: writable,
         mail: RESEND_API_KEY ? 'on' : 'off'
       });
+    }
+
+    if (url === '/api/config' && method === 'GET') {
+      return json(res, 200, {
+        ok: true,
+        cloudinary: {
+          cloudName: CLOUDINARY_CLOUD_NAME,
+          configured: Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET)
+        }
+      });
+    }
+
+    if (url === '/api/cloudinary-signature' && method === 'POST') {
+      if (!requireAdmin(req, res)) return;
+      if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+        return json(res, 503, { ok: false, error: 'Set all CLOUDINARY_* variables in Railway before uploading images.' });
+      }
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signature = crypto.createHash('sha1')
+        .update('folder=products&timestamp=' + timestamp + CLOUDINARY_API_SECRET)
+        .digest('hex');
+      return json(res, 200, {
+        ok: true,
+        cloudName: CLOUDINARY_CLOUD_NAME,
+        apiKey: CLOUDINARY_API_KEY,
+        folder: 'products',
+        timestamp,
+        signature
+      });
+    }
+
+    if (new URL(url, 'http://localhost').pathname === '/api/products' && method === 'GET') {
+      const adminView = new URL(url, 'http://localhost').searchParams.get('admin') === '1';
+      if (adminView && !requireAdmin(req, res)) return;
+      try {
+        const products = loadProducts();
+        return json(res, 200, {
+          ok: true,
+          configured: products !== null,
+          products: adminView ? products : publicProducts(products)
+        });
+      } catch (error) {
+        console.error('[products] read failed:', error.message);
+        return json(res, 500, { ok: false, error: 'Could not read saved product catalogue.' });
+      }
+    }
+
+    if (url === '/api/products' && (method === 'POST' || method === 'PUT')) {
+      if (!requireAdmin(req, res)) return;
+      let body;
+      try { body = await readBody(req, 2500000); }
+      catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+      if (!Array.isArray(body.products) || body.products.length > 500) {
+        return json(res, 400, { ok: false, error: 'Product catalogue must be an array of at most 500 products.' });
+      }
+      const encoded = JSON.stringify(body.products);
+      if (Buffer.byteLength(encoded, 'utf8') > 2000000 || /"data:image\//i.test(encoded)) {
+        return json(res, 413, { ok: false, error: 'Product images must be uploaded to Cloudinary before saving.' });
+      }
+      if (body.products.some(product =>
+        !product || typeof product.name !== 'string' || !product.name.trim() ||
+        typeof product.image !== 'string' || !product.image.trim()
+      )) {
+        return json(res, 400, { ok: false, error: 'Every product needs a name and an image URL.' });
+      }
+      try {
+        const existing = loadProducts();
+        if (method === 'POST' && existing !== null) {
+          return json(res, 409, { ok: false, error: 'The product catalogue has already been initialized.' });
+        }
+        if (method === 'PUT' && existing === null) {
+          return json(res, 409, { ok: false, error: 'Initialize the product catalogue before updating it.' });
+        }
+        saveProducts(body.products);
+        return json(res, 200, { ok: true, count: body.products.length });
+      } catch (error) {
+        console.error('[products] save failed:', error.message);
+        return json(res, 500, { ok: false, error: 'Could not save product catalogue. Check Railway persistent storage.' });
+      }
     }
 
     if (url === '/api/orders' && method === 'POST') {

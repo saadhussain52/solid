@@ -3,11 +3,12 @@
  * Reads every product, size, price, image and text from the shared store
  * (store-data.js) so anything changed in the admin workspace appears here.
  */
-(() => {
+(async () => {
   'use strict';
 
   const Store = window.Store;
   if (!Store) return;
+  await Store.api.productsReady;
 
   const { money, slugify, escapeHtml, escapeAttr } = Store;
   const grid = document.querySelector('#product-grid');
@@ -20,6 +21,7 @@
   };
 
   const productLabel = product => Store.categoryName(product.category);
+  window.addEventListener('store:products-loaded', () => renderProducts(currentFilter));
 
   /* ------------------------------------------------------- site content */
 

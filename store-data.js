@@ -1,8 +1,8 @@
 /*
  * Solids — shared store data layer.
  * Single source of truth for the storefront and the admin workspace.
- * Everything is persisted in localStorage so admin edits show up instantly
- * on every page (products, texts, images, sizes, stock, cost & pricing).
+ * Store settings are persisted in localStorage. Product catalog data is also
+ * synchronized with the server when its shared product API is available.
  */
 (function (global) {
   'use strict';
@@ -510,14 +510,17 @@
       next.push(record);
       index = next.length - 1;
     }
-    if (!write(KEYS.products, next)) return -1;
+    if (!api.productsOnline && !write(KEYS.products, next)) return -1;
     state.products = next;
     return index;
   }
 
   function removeProduct(index) {
-    state.products.splice(index, 1);
-    save('products');
+    var next = state.products.slice();
+    next.splice(index, 1);
+    if (!api.productsOnline && !write(KEYS.products, next)) return false;
+    state.products = next;
+    return true;
   }
 
   function restock(productId, label, amount, mode) {
@@ -527,7 +530,7 @@
     if (!size) return;
     var value = num(amount);
     size.stock = Math.max(0, mode === 'set' ? value : size.stock + value);
-    save('products');
+    if (!api.productsOnline) save('products');
   }
 
   function addCategory(name) {
@@ -676,7 +679,7 @@
         product.sold = num(product.sold) + num(item.qty, 1);
       }
     });
-    save('products');
+    if (!api.productsOnline) save('products');
     return order;
   }
 
@@ -841,6 +844,116 @@
     /* True once a request to the API has actually succeeded, so the
        confirmation screen can be honest about whether mail was sent. */
     online: false,
+    productsOnline: false,
+    productsConfigured: false,
+
+    adminKey: function () {
+      var key = '';
+      try { key = global.sessionStorage.getItem('solids-admin-key') || ''; } catch (error) { /* prompt below */ }
+      if (key) return key;
+      key = global.prompt('Enter the Railway ADMIN_KEY to manage products:') || '';
+      if (key) {
+        try { global.sessionStorage.setItem('solids-admin-key', key); } catch (error) { /* use for this request */ }
+      }
+      return key;
+    },
+
+    loadProducts: function () {
+      return fetch('/api/products')
+        .then(function (response) {
+          if (!response.ok) throw new Error('Product API ' + response.status);
+          return response.json();
+        })
+        .then(function (data) {
+          api.productsOnline = true;
+          api.productsConfigured = !!data.configured;
+          if (Array.isArray(data.products)) {
+            state.products = data.products.map(normalizeProduct);
+            global.dispatchEvent(new CustomEvent('store:products-loaded'));
+          }
+          return { online: true, configured: api.productsConfigured };
+        })
+        .catch(function (error) {
+          api.productsOnline = false;
+          api.productsConfigured = false;
+          return { online: false, configured: false, error: error.message };
+        });
+    },
+
+    loadAdminProducts: function () {
+      var key = api.adminKey();
+      if (!key) return Promise.reject(new Error('An ADMIN_KEY is required to manage the shared product catalogue.'));
+      return fetch('/api/products?admin=1', { headers: { 'x-admin-key': key } })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (response.status === 401) {
+              try { global.sessionStorage.removeItem('solids-admin-key'); } catch (error) { /* ignore */ }
+              throw new Error('The ADMIN_KEY was rejected. Check the Railway variable and try again.');
+            }
+            if (!response.ok) throw new Error(data.error || 'Could not load the shared product catalogue.');
+            api.productsOnline = true;
+            api.productsConfigured = !!data.configured;
+            if (Array.isArray(data.products)) {
+              state.products = data.products.map(normalizeProduct);
+              global.dispatchEvent(new CustomEvent('store:products-loaded'));
+            }
+            return { online: true, configured: api.productsConfigured };
+          });
+        });
+    },
+
+    saveProducts: function (products, initialize) {
+      var key = api.adminKey();
+      if (!key) return Promise.reject(new Error('An ADMIN_KEY is required to save products.'));
+      return fetch('/api/products', {
+        method: initialize ? 'POST' : 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+        body: JSON.stringify({ products: products })
+      }).then(function (response) {
+        return response.json().then(function (data) {
+          if (response.status === 401) {
+            try { global.sessionStorage.removeItem('solids-admin-key'); } catch (error) { /* ignore */ }
+            throw new Error('The ADMIN_KEY was rejected. Check the Railway variable and try again.');
+          }
+          if (!response.ok) throw new Error(data.error || 'Could not save products to Railway.');
+          api.productsOnline = true;
+          api.productsConfigured = true;
+          return data;
+        });
+      });
+    },
+
+    uploadImage: function (source) {
+      var key = api.adminKey();
+      if (!key) return Promise.reject(new Error('An ADMIN_KEY is required to upload product images.'));
+      return fetch('/api/cloudinary-signature', {
+        method: 'POST',
+        headers: { 'x-admin-key': key }
+      }).then(function (response) {
+        return response.json().then(function (config) {
+          if (!response.ok) throw new Error(config.error || 'Could not prepare secure Cloudinary upload.');
+          return fetch(source).then(function (sourceResponse) { return sourceResponse.blob(); }).then(function (blob) {
+            var form = new FormData();
+            form.append('file', blob, 'product-image');
+            form.append('api_key', config.apiKey);
+            form.append('timestamp', String(config.timestamp));
+            form.append('signature', config.signature);
+            form.append('folder', config.folder);
+            return fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(config.cloudName) + '/image/upload', {
+              method: 'POST',
+              body: form
+            }).then(function (uploadResponse) {
+              return uploadResponse.json().then(function (data) {
+                if (!uploadResponse.ok || !data.secure_url) {
+                  throw new Error((data.error && data.error.message) || 'Cloudinary rejected the image upload.');
+                }
+                return data.secure_url;
+              });
+            });
+          });
+        });
+      });
+    },
 
     /* POST an order. Resolves { ok, order, emailSent, trackUrl }; `order` is
        the server's copy when it answered, otherwise the caller's local one. */
@@ -856,7 +969,7 @@
         })
         .then(function (data) {
           api.online = true;
-          return data;
+          return api.loadProducts().then(function () { return data; });
         });
     },
 
@@ -930,5 +1043,6 @@
     resetAll: resetAll
   };
 
+  api.productsReady = api.loadProducts();
   write(KEYS.version, '2');
 })(window);
