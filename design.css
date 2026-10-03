@@ -113,6 +113,46 @@ body{
   }
 }
 
+@media(max-width:560px) {
+  .site-header,
+  .catalog-header,
+  .home-body .site-header {
+    row-gap:8px;
+    padding:10px 5vw 9px
+  }
+
+  .site-header .wordmark,
+  .catalog-header .wordmark {
+    order:0;
+    flex:0 1 auto;
+    justify-content:flex-start
+  }
+
+  .site-header .brand-logo,
+  .catalog-header .brand-logo,
+  .home-body .brand-logo {
+    height:36px
+  }
+
+  .site-header .header-actions,
+  .catalog-header .header-actions {
+    order:1;
+    gap:16px
+  }
+
+  .site-header .desktop-nav,
+  .catalog-header .desktop-nav {
+    order:2;
+    flex:0 0 100%;
+    justify-content:center;
+    gap:clamp(14px,4vw,20px);
+    padding:9px 0 2px;
+    border-top:1px solid var(--hairline);
+    font-size:10px;
+    letter-spacing:.15px
+  }
+}
+
 /* collections dropdown in the header */
 .nav-dropdown{position:relative;list-style:none;display:flex;align-items:center}
 /* match the sibling nav links exactly, or the caret drags the baseline */
