@@ -70,6 +70,10 @@ const dataDir = process.env.DATA_DIR
   : path.join(root, 'data');
 const ordersFile = path.join(dataDir, 'orders.json');
 const productsFile = path.join(dataDir, 'products.json');
+/* Product photos live here. Keeping them on the same volume as the catalogue
+   means the site works without any third-party image account: the admin picks a
+   file, the server stores it, and the catalogue only ever holds a short URL. */
+const uploadsDir = path.join(dataDir, 'uploads');
 
 /* Orders live in one JSON file. Reads are cached in memory and every write
    goes to a temp file first, then replaces the original, so a crash mid-write
@@ -380,6 +384,55 @@ const json = (res, status, body) => {
   res.end(JSON.stringify(body));
 };
 
+/* Accepts a raw image body with the type in a query parameter. Returns the URL
+   the catalogue should store. The admin page sends one request per image. */
+const IMAGE_TYPES = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/avif': '.avif'
+};
+
+const handleUpload = async (req, res, url) => {
+  if (!requireAdmin(req, res)) return;
+  const type = String(new URL(url, 'http://localhost').searchParams.get('type') || '').toLowerCase();
+  const extension = IMAGE_TYPES[type];
+  if (!extension) {
+    return json(res, 400, { ok: false, error: 'Please upload a PNG, JPG, WEBP, GIF or AVIF image.' });
+  }
+  let buffer;
+  try { buffer = await readBinary(req); }
+  catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+  if (!buffer || !buffer.length) {
+    return json(res, 400, { ok: false, error: 'That image file was empty.' });
+  }
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    const name = Date.now() + '-' + Math.random().toString(36).slice(2, 10) + extension;
+    fs.writeFileSync(path.join(uploadsDir, name), buffer);
+    return json(res, 200, { ok: true, url: '/uploads/' + name });
+  } catch (error) {
+    console.error('[upload] save failed:', error.message);
+    return json(res, 500, { ok: false, error: 'Could not store the image. Check Railway persistent storage.' });
+  }
+};
+
+/* Serves a stored product photo. Kept separate from the static handler because
+   the files live in the data volume, not in the deployed code. */
+const serveUpload = (res, name) => {
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) return false;
+  const filePath = path.join(uploadsDir, name);
+  if (!fs.existsSync(filePath)) return false;
+  res.writeHead(200, {
+    'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+    'Cache-Control': 'public, max-age=31536000, immutable'
+  });
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+};
+
 const readBody = (req, limit = 200000) => new Promise((resolve, reject) => {
   let raw = '';
   /* Cap the body so a malformed or hostile request cannot grow unbounded. */
@@ -395,6 +448,24 @@ const readBody = (req, limit = 200000) => new Promise((resolve, reject) => {
     try { resolve(JSON.parse(raw)); }
     catch (error) { reject(new Error('Invalid JSON body')); }
   });
+  req.on('error', reject);
+});
+
+/* Same idea, but keeps the raw bytes for an image upload, where JSON.parse
+   would corrupt the file. */
+const readBinary = (req, limit = 6000000) => new Promise((resolve, reject) => {
+  const chunks = [];
+  let total = 0;
+  req.on('data', chunk => {
+    total += chunk.length;
+    if (total > limit) {
+      reject(new Error('Image is too large. Please pick a smaller file (under 5MB).'));
+      req.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
+  req.on('end', () => resolve(Buffer.concat(chunks)));
   req.on('error', reject);
 });
 
@@ -685,6 +756,12 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    /* The admin page's own image upload. Needs no third-party account, so a fresh
+       deploy can add products immediately. */
+    if (url.startsWith('/api/upload') && method === 'POST') {
+      return handleUpload(req, res, url);
+    }
+
     if (new URL(url, 'http://localhost').pathname === '/api/products' && method === 'GET') {
       const adminView = new URL(url, 'http://localhost').searchParams.get('admin') === '1';
       if (adminView && !requireAdmin(req, res)) return;
@@ -711,7 +788,7 @@ const server = http.createServer(async (req, res) => {
       }
       const encoded = JSON.stringify(body.products);
       if (Buffer.byteLength(encoded, 'utf8') > 2000000 || /"data:image\//i.test(encoded)) {
-        return json(res, 413, { ok: false, error: 'Product images must be uploaded to Cloudinary before saving.' });
+        return json(res, 413, { ok: false, error: 'Product images must be uploaded to the server before saving.' });
       }
       if (body.products.some(product =>
         !product || typeof product.name !== 'string' || !product.name.trim() ||
@@ -750,6 +827,15 @@ const server = http.createServer(async (req, res) => {
   if (method !== 'GET' && method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' });
     return res.end();
+  }
+
+  /* Stored product photos. These live on the data volume rather than in the
+     deployed code, so they need their own route. */
+  if (url.startsWith('/uploads/')) {
+    const name = decodeURIComponent(url.slice('/uploads/'.length).split('?')[0]);
+    if (serveUpload(res, name)) return;
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Image not found');
   }
 
   const filePath = resolveFile(url);

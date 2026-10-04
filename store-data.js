@@ -988,34 +988,32 @@
       });
     },
 
+    /* Uploads the image to our own server and resolves with the stored URL. No
+       Cloudinary account or API secret is involved, so a fresh deploy can add
+       products as soon as ADMIN_KEY is set. */
     uploadImage: function (source) {
       var key = api.adminKey();
       if (!key) return Promise.reject(new Error('An ADMIN_KEY is required to upload product images.'));
-      return fetch('/api/cloudinary-signature', {
-        method: 'POST',
-        headers: { 'x-admin-key': key }
+      return fetch(source).then(function (sourceResponse) { return sourceResponse.blob(); }).then(function (blob) {
+        if (!blob || !blob.type.startsWith('image/')) {
+          return Promise.reject(new Error('That file is not an image. Please pick a PNG or JPG.'));
+        }
+        return fetch('/api/upload?type=' + encodeURIComponent(blob.type), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream', 'x-admin-key': key },
+          body: blob
+        });
       }).then(function (response) {
-        return response.json().then(function (config) {
-          if (!response.ok) throw new Error(config.error || 'Could not prepare secure Cloudinary upload.');
-          return fetch(source).then(function (sourceResponse) { return sourceResponse.blob(); }).then(function (blob) {
-            var form = new FormData();
-            form.append('file', blob, 'product-image');
-            form.append('api_key', config.apiKey);
-            form.append('timestamp', String(config.timestamp));
-            form.append('signature', config.signature);
-            form.append('folder', config.folder);
-            return fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(config.cloudName) + '/image/upload', {
-              method: 'POST',
-              body: form
-            }).then(function (uploadResponse) {
-              return uploadResponse.json().then(function (data) {
-                if (!uploadResponse.ok || !data.secure_url) {
-                  throw new Error((data.error && data.error.message) || 'Cloudinary rejected the image upload.');
-                }
-                return data.secure_url;
-              });
-            });
-          });
+        return response.json().then(function (data) {
+          if (response.status === 401) {
+            try { global.sessionStorage.removeItem('solids-admin-key'); } catch (error) { /* ignore */ }
+            throw new Error('The ADMIN_KEY was rejected. Copy it exactly from Railway Variables.');
+          }
+          if (response.status === 503) {
+            throw new Error('ADMIN_KEY is not set on Railway, so product editing is locked. Add ADMIN_KEY to the service Variables and redeploy.');
+          }
+          if (!response.ok || !data.url) throw new Error(data.error || 'Could not upload the image.');
+          return data.url;
         });
       });
     },
