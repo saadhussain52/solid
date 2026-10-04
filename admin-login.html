@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Studio sign in | Solids</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="stylesheet" href="responsive.css">
+  <link rel="stylesheet" href="theme-green.css">
+  <style>
+    /* Deliberately self-contained: the login screen has to render even if the
+       dashboard scripts are still loading, and must never depend on the store. */
+    body.login-body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #10130f;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: #f7f5f0;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 18px;
+      padding: 36px 32px 30px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .45);
+      text-align: center;
+    }
+
+    .login-card img.brand-logo {
+      width: 62px;
+      height: auto;
+      margin: 0 auto 18px;
+      display: block;
+    }
+
+    .login-card h1 {
+      font-family: 'Libre Baskerville', Georgia, serif;
+      font-size: 22px;
+      margin: 0 0 6px;
+      color: #1c1f1a;
+    }
+
+    .login-card p.sub {
+      margin: 0 0 24px;
+      font-size: 14px;
+      color: #6b7066;
+    }
+
+    .login-field {
+      text-align: left;
+      margin-bottom: 14px;
+    }
+
+    .login-field label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #6b7066;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .login-field input {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      border: 1px solid #d8d4c9;
+      border-radius: 10px;
+      background: #fff;
+      color: #1c1f1a;
+    }
+
+    .login-field input:focus {
+      outline: none;
+      border-color: #4b7a3f;
+      box-shadow: 0 0 0 3px rgba(75, 122, 63, .16);
+    }
+
+    .login-submit {
+      width: 100%;
+      margin-top: 8px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: inherit;
+      border: 0;
+      border-radius: 10px;
+      background: #1c1f1a;
+      color: #f7f5f0;
+      cursor: pointer;
+    }
+
+    .login-submit:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    .login-message {
+      margin: 14px 0 0;
+      font-size: 13px;
+      color: #a3341f;
+      min-height: 18px;
+    }
+
+    .login-message.ok {
+      color: #3f6b32;
+    }
+
+    .login-back {
+      display: inline-block;
+      margin-top: 18px;
+      font-size: 13px;
+      color: #6b7066;
+      text-decoration: none;
+    }
+
+    .login-back:hover {
+      color: #1c1f1a;
+    }
+  </style>
+</head>
+
+<body class="login-body">
+  <main class="login-card">
+    <img class="brand-logo" src="solids-logo-light.png" alt="Solids">
+    <h1>Studio sign in</h1>
+    <p class="sub">Only the store owner can open this workspace.</p>
+
+    <form id="login-form" autocomplete="on">
+      <div class="login-field">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+      </div>
+      <div class="login-field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="login-submit" type="submit" id="login-submit">Sign in</button>
+      <p class="login-message" id="login-message" role="alert"></p>
+    </form>
+
+    <a class="login-back" href="index.html">← Back to the storefront</a>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const form = document.querySelector('#login-form');
+      const message = document.querySelector('#login-message');
+      const submit = document.querySelector('#login-submit');
+
+      /* The server sets ?next= when it bounces someone off an admin page, so
+         they land where they were trying to go after signing in. It is read from
+         a fixed allow-list rather than used directly, so a crafted link cannot
+         turn this form into an open redirect. */
+      const ADMIN_PAGES = ['/admin.html', '/products.html', '/orders.html', '/categories.html', '/customers.html'];
+      const requestedNext = new URLSearchParams(location.search).get('next');
+      const nextPage = ADMIN_PAGES.indexOf(requestedNext) !== -1 ? requestedNext : '/admin.html';
+
+      const say = (text, ok) => {
+        message.textContent = text;
+        message.classList.toggle('ok', Boolean(ok));
+      };
+
+      /* If a session is already valid there is nothing to do here. */
+      fetch('/api/admin/session')
+        .then(response => response.json())
+        .then(data => { if (data.signedIn) location.replace(nextPage); })
+        .catch(() => { /* a dead API just means the form has to be used */ });
+
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        submit.disabled = true;
+        say('Signing in…', true);
+        try {
+          const response = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: document.querySelector('#username').value,
+              password: document.querySelector('#password').value
+            })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            say(data.error || 'Could not sign in. Please try again.');
+            submit.disabled = false;
+            document.querySelector('#password').value = '';
+            document.querySelector('#password').focus();
+            return;
+          }
+          say('Signed in. Opening your workspace…', true);
+          location.replace(nextPage);
+        } catch (error) {
+          say('Could not reach the server. Please check your connection.');
+          submit.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+
+</html>

@@ -883,37 +883,32 @@
     productsOnline: false,
     productsConfigured: false,
     adminEditingEnabled: false,
-    cloudinaryConfigured: false,
     configPromise: null,
 
-    adminKey: function () {
-      var key = '';
-      try { key = global.sessionStorage.getItem('solids-admin-key') || ''; } catch (error) { /* prompt below */ }
-      if (key) return key;
-      key = global.prompt('Enter the Railway ADMIN_KEY to manage products:\n\n(Cancel if you are not sure — product editing stays locked.)') || '';
-      if (key) {
-        key = key.trim();
-        try { global.sessionStorage.setItem('solids-admin-key', key); } catch (error) { /* use for this request */ }
-      }
-      return key;
+    /* The admin session lives in an HttpOnly cookie the server set at login, so
+       there is nothing to ask for and nothing to keep in the page. Checking the
+       server first means an expired session redirects to the login form instead
+       of failing with a confusing write error. */
+    session: function () {
+      return fetch('/api/admin/session')
+        .then(function (response) { return response.json(); })
+        .catch(function () { return { ok: false, signedIn: false, configured: false }; });
     },
 
-    /* Whether the server has an ADMIN_KEY at all. Without one, product editing is
-       locked on the server side and no amount of typing in the browser will help,
-       so the admin page has to say so instead of asking for a key pointlessly. */
+    /* Whether the owner has finished wiring up login on the server. Without it
+       the admin pages cannot be opened at all, so the login screen has to say
+       so plainly instead of silently failing. */
     serverConfig: function () {
       if (api.configPromise) return api.configPromise;
       api.configPromise = fetch('/api/config')
         .then(function (response) { return response.json(); })
         .then(function (data) {
           api.adminEditingEnabled = !!data.adminEditing;
-          api.cloudinaryConfigured = !!(data.cloudinary && data.cloudinary.configured);
           return data;
         })
         .catch(function () {
           api.adminEditingEnabled = false;
-          api.cloudinaryConfigured = false;
-          return { adminEditing: false, cloudinary: { configured: false } };
+          return { adminEditing: false };
         });
       return api.configPromise;
     },
@@ -940,20 +935,25 @@
         });
     },
 
+    /* A 401 anywhere means the session expired or was signed out. Sending the
+       browser back to the login form is the only honest response; trying to
+       continue would just fail again on the next write. */
+    sendToLogin: function () {
+      if (global.location && global.location.pathname.indexOf('admin-login') === -1) {
+        global.location.replace('/admin-login.html?next=' + encodeURIComponent(global.location.pathname));
+      }
+    },
+
     loadAdminProducts: function () {
-      var key = api.adminKey();
-      if (!key) return Promise.reject(new Error('An ADMIN_KEY is required to manage the shared product catalogue.'));
-      return fetch('/api/products?admin=1', { headers: { 'x-admin-key': key } })
+      return fetch('/api/products?admin=1', { credentials: 'same-origin' })
         .then(function (response) {
           return response.json().then(function (data) {
             if (response.status === 401) {
-              try { global.sessionStorage.removeItem('solids-admin-key'); } catch (error) { /* ignore */ }
-              throw new Error('The ADMIN_KEY was rejected. Copy it exactly from Railway Variables.');
+              api.sendToLogin();
+              throw new Error('Please sign in to the admin panel.');
             }
             if (response.status === 503) {
-              /* Not a wrong key — the server has no key at all. Typing into the
-                 prompt can never fix this, so say what actually has to happen. */
-              throw new Error('ADMIN_KEY is not set on Railway, so product editing is locked. Add ADMIN_KEY to the service Variables and redeploy.');
+              throw new Error('Admin login is not set up on Railway yet. Add ADMIN_USERNAME and ADMIN_PASSWORD to the service Variables, then redeploy.');
             }
             if (!response.ok) throw new Error(data.error || 'Could not load the shared product catalogue.');
             api.productsOnline = true;
@@ -968,19 +968,18 @@
     },
 
     saveProducts: function (products, initialize) {
-      var key = api.adminKey();
-      if (!key) return Promise.reject(new Error('An ADMIN_KEY is required to save products.'));
       return fetch('/api/products', {
         method: initialize ? 'POST' : 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ products: products })
       }).then(function (response) {
         return response.json().then(function (data) {
           if (response.status === 401) {
-            try { global.sessionStorage.removeItem('solids-admin-key'); } catch (error) { /* ignore */ }
-            throw new Error('The ADMIN_KEY was rejected. Check the Railway variable and try again.');
+            api.sendToLogin();
+            throw new Error('Please sign in to the admin panel.');
           }
-          if (!response.ok) throw new Error(data.error || 'Could not save products to Railway.');
+          if (!response.ok) throw new Error(data.error || 'Could not save products to the server.');
           api.productsOnline = true;
           api.productsConfigured = true;
           return data;
@@ -990,27 +989,26 @@
 
     /* Uploads the image to our own server and resolves with the stored URL. No
        Cloudinary account or API secret is involved, so a fresh deploy can add
-       products as soon as ADMIN_KEY is set. */
+       products as soon as the admin login is set up. */
     uploadImage: function (source) {
-      var key = api.adminKey();
-      if (!key) return Promise.reject(new Error('An ADMIN_KEY is required to upload product images.'));
       return fetch(source).then(function (sourceResponse) { return sourceResponse.blob(); }).then(function (blob) {
         if (!blob || !blob.type.startsWith('image/')) {
           return Promise.reject(new Error('That file is not an image. Please pick a PNG or JPG.'));
         }
         return fetch('/api/upload?type=' + encodeURIComponent(blob.type), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/octet-stream', 'x-admin-key': key },
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/octet-stream' },
           body: blob
         });
       }).then(function (response) {
         return response.json().then(function (data) {
           if (response.status === 401) {
-            try { global.sessionStorage.removeItem('solids-admin-key'); } catch (error) { /* ignore */ }
-            throw new Error('The ADMIN_KEY was rejected. Copy it exactly from Railway Variables.');
+            api.sendToLogin();
+            throw new Error('Please sign in to the admin panel.');
           }
           if (response.status === 503) {
-            throw new Error('ADMIN_KEY is not set on Railway, so product editing is locked. Add ADMIN_KEY to the service Variables and redeploy.');
+            throw new Error('Admin login is not set up on Railway yet. Add ADMIN_USERNAME and ADMIN_PASSWORD to the service Variables, then redeploy.');
           }
           if (!response.ok || !data.url) throw new Error(data.error || 'Could not upload the image.');
           return data.url;

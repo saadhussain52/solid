@@ -121,17 +121,119 @@ const saveProducts = products => {
   productsCache = products;
 };
 
-const requireAdmin = (req, res) => {
-  const expected = process.env.ADMIN_KEY || '';
-  const supplied = String(req.headers['x-admin-key'] || '');
-  if (!expected) {
-    json(res, 503, { ok: false, error: 'Product editing is locked. Set ADMIN_KEY in Railway variables.' });
+/* ------------------------------------------------------------ admin sessions
+
+   The admin panel is guarded by a real signed-cookie session rather than a key
+   typed into the page, so a visitor cannot reach it by guessing a URL.
+
+   Credentials live in ADMIN_USERNAME and ADMIN_PASSWORD. The plaintext password
+   exists only in the server's environment (set in Railway Variables), is never
+   sent to the browser, and is compared with a constant-time check. */
+
+const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || '').trim();
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
+
+const adminCredentialsReady = Boolean(ADMIN_USERNAME && ADMIN_PASSWORD);
+
+/* A session is just a random id plus its expiry, kept in memory. Restarting the
+   service signs everyone out, which is the safe default for a single-admin shop. */
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
+const sessions = new Map();
+
+const createSession = () => {
+  const id = crypto.randomBytes(32).toString('hex');
+  sessions.set(id, Date.now() + SESSION_TTL_MS);
+  return id;
+};
+
+const sessionValid = id => {
+  if (!id) return false;
+  const expiry = sessions.get(id);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    sessions.delete(id);
     return false;
   }
-  const expectedBuffer = Buffer.from(expected);
-  const suppliedBuffer = Buffer.from(supplied);
-  if (expectedBuffer.length !== suppliedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, suppliedBuffer)) {
-    json(res, 401, { ok: false, error: 'Admin key is incorrect.' });
+  return true;
+};
+
+const SESSION_COOKIE = 'solids_admin';
+
+/* Reads the session id from the cookie header without pulling in a cookie parser
+   dependency for a single value. */
+const readCookie = (req, name) => {
+  const header = String(req.headers.cookie || '');
+  const parts = header.split(';');
+  for (const part of parts) {
+    const index = part.indexOf('=');
+    if (index === -1) continue;
+    if (part.slice(0, index).trim() === name) return decodeURIComponent(part.slice(index + 1).trim());
+  }
+  return '';
+};
+
+/* Clears expired sessions periodically so the map cannot grow without bound on
+   a long-running service. */
+setInterval(() => {
+  const now = Date.now();
+  sessions.forEach((expiry, id) => { if (now > expiry) sessions.delete(id); });
+}, 1000 * 60 * 30).unref();
+
+/* Constant-time string compare that does not leak length through an early exit. */
+const safeEqual = (a, b) => {
+  const bufferA = Buffer.from(String(a));
+  const bufferB = Buffer.from(String(b));
+  if (bufferA.length !== bufferB.length) return false;
+  return crypto.timingSafeEqual(bufferA, bufferB);
+};
+
+/* -------------------------------------------------------------- brute force
+
+   A public login page on the open internet will get guessed at, so failed
+   attempts from the same address are counted and the form is refused for a
+   while once the limit is passed. In-memory only: a restart clears the count,
+   which is acceptable because it is paired with a strong password. */
+
+const MAX_ATTEMPTS = 6;
+const LOCKOUT_MS = 1000 * 60 * 10;
+/* Named apart from the order-lookup counter further down, which is unrelated. */
+const loginFailures = new Map();
+
+const clientAddress = req => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+  || req.socket.remoteAddress || 'unknown';
+
+const loginBlockedFor = address => {
+  const record = loginFailures.get(address);
+  if (!record || !record.until) return 0;
+  const remaining = record.until - Date.now();
+  if (remaining <= 0) {
+    loginFailures.delete(address);
+    return 0;
+  }
+  return remaining;
+};
+
+const noteFailedLogin = address => {
+  const record = loginFailures.get(address) || { count: 0, until: 0 };
+  record.count += 1;
+  if (record.count >= MAX_ATTEMPTS) {
+    record.until = Date.now() + LOCKOUT_MS;
+    record.count = 0;
+    console.warn('[login] too many failures from ' + address + ' - locked out for ' + Math.round(LOCKOUT_MS / 60000) + ' minutes');
+  }
+  loginFailures.set(address, record);
+};
+
+/* True when the caller holds a valid admin session cookie. */
+const isAdmin = req => sessionValid(readCookie(req, SESSION_COOKIE));
+
+const requireAdmin = (req, res) => {
+  if (!adminCredentialsReady) {
+    json(res, 503, { ok: false, error: 'Admin login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD in Railway variables.' });
+    return false;
+  }
+  if (!isAdmin(req)) {
+    json(res, 401, { ok: false, error: 'Please sign in to the admin panel.' });
     return false;
   }
   return true;
@@ -625,13 +727,9 @@ const handleUpdate = async (req, res, reference) => {
   try { body = await readBody(req); }
   catch (error) { return json(res, 400, { ok: false, error: error.message }); }
 
-  /* Closed unless ADMIN_KEY is set, so nobody can mark orders delivered from
-     a random browser over the open internet. */
-  const expected = process.env.ADMIN_KEY || '';
-  const given = String(req.headers['x-admin-key'] || '');
-  if (!expected || given !== expected) {
-    return json(res, 401, { ok: false, error: 'Not authorised' });
-  }
+  /* Same signed session as the product endpoints: nobody can mark an order
+     delivered from a random browser. */
+  if (!requireAdmin(req, res)) return;
 
   /* Must stay in step with ORDER_STATUSES in admin-pages.js, otherwise the
      studio picks a status in the panel and the server rejects it. */
@@ -723,13 +821,58 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    /* POST /api/admin/login — checks the credentials and hands back a session
+       cookie. The browser stores the cookie and never sees the password again. */
+    if (url === '/api/admin/login' && method === 'POST') {
+      if (!adminCredentialsReady) {
+        return json(res, 503, { ok: false, error: 'Admin login is not configured on the server yet.' });
+      }
+      const address = clientAddress(req);
+      const blockedFor = loginBlockedFor(address);
+      if (blockedFor > 0) {
+        console.warn('[login] blocked attempt from ' + address);
+        const minutes = Math.ceil(blockedFor / 60000);
+        return json(res, 429, { ok: false, error: 'Too many failed sign-in attempts. Try again in ' + minutes + ' minute' + (minutes === 1 ? '' : 's') + '.' });
+      }
+      let body;
+      try { body = await readBody(req, 5000); }
+      catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+      const username = String(body.username || '').trim();
+      const password = String(body.password || '');
+      /* Compare both regardless of the result so a wrong username is not
+         measurably faster than a wrong password. */
+      const usernameOk = safeEqual(username, ADMIN_USERNAME);
+      const passwordOk = safeEqual(password, ADMIN_PASSWORD);
+      if (!usernameOk || !passwordOk) {
+        noteFailedLogin(address);
+        return json(res, 401, { ok: false, error: 'Wrong username or password.' });
+      }
+      loginFailures.delete(address);
+      const id = createSession();
+      res.setHeader('Set-Cookie',
+        SESSION_COOKIE + '=' + id + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + Math.floor(SESSION_TTL_MS / 1000));
+      return json(res, 200, { ok: true, username: ADMIN_USERNAME });
+    }
+
+    /* POST /api/admin/logout — drops the session and clears the cookie. */
+    if (url === '/api/admin/logout' && method === 'POST') {
+      sessions.delete(readCookie(req, SESSION_COOKIE));
+      res.setHeader('Set-Cookie', SESSION_COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+      return json(res, 200, { ok: true });
+    }
+
+    /* GET /api/admin/session — lets a page ask whether it should show itself. */
+    if (url === '/api/admin/session' && method === 'GET') {
+      return json(res, 200, { ok: true, signedIn: isAdmin(req), configured: adminCredentialsReady });
+    }
+
     if (url === '/api/config' && method === 'GET') {
-      /* Tells the admin page which setup steps are still missing, so it can say
-         "ADMIN_KEY is not set on Railway" instead of the browser's bare
-         JavaScript prompt that gave no clue what had gone wrong. */
+      /* Tells the admin page whether the owner has finished wiring up login, so
+         it can say so plainly instead of failing later with no explanation. */
       return json(res, 200, {
         ok: true,
-        adminEditing: Boolean(process.env.ADMIN_KEY),
+        adminEditing: adminCredentialsReady,
+        adminOpen: false,
         cloudinary: {
           cloudName: CLOUDINARY_CLOUD_NAME,
           configured: Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET)
@@ -838,6 +981,16 @@ const server = http.createServer(async (req, res) => {
     return res.end('Image not found');
   }
 
+  /* Every admin page is behind the login. Serving these to anyone would leak the
+     whole dashboard, so an unsigned request is bounced to the login form with
+     the page they wanted kept in the query string. */
+  const ADMIN_PAGES = ['/admin.html', '/products.html', '/orders.html', '/categories.html', '/customers.html'];
+  const requested = decodeURIComponent(url.split('?')[0]);
+  if (ADMIN_PAGES.indexOf(requested) !== -1 && !isAdmin(req)) {
+    res.writeHead(302, { Location: '/admin-login.html?next=' + encodeURIComponent(requested) });
+    return res.end();
+  }
+
   const filePath = resolveFile(url);
   if (!filePath) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -853,8 +1006,8 @@ server.listen(PORT, () => {
   } else {
     console.log('  emails: OFF - set RESEND_API_KEY in .env to send tracking links.');
   }
-  if (!process.env.ADMIN_KEY) {
-    console.log('  admin status updates: locked (set ADMIN_KEY in .env to unlock)');
+  if (!adminCredentialsReady) {
+    console.log('  admin panel: locked (set ADMIN_USERNAME and ADMIN_PASSWORD to unlock)');
   }
   if (!SITE_URL) {
     console.log('  SITE_URL not set - links in email use localhost.');

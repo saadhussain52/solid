@@ -121,16 +121,34 @@
     };
 
     Store.api.serverConfig().then(config => {
-      if (config.adminEditing) {
-        paint('');
-        return;
-      }
-      paint('Product editing is locked: ADMIN_KEY is not set on Railway. Add it to the service Variables, then redeploy.');
+      paint(config.adminEditing
+        ? ''
+        : 'Admin login is not set up on Railway yet. Add ADMIN_USERNAME and ADMIN_PASSWORD to the service Variables, then redeploy.');
     });
 
     return paint;
   }
   window.setupBanner = setupBanner;
+
+  /* A sign-out button in the sidebar. The session lives in an HttpOnly cookie
+     the browser cannot clear itself, so it has to be the server that drops it. */
+  function installLogout() {
+    const sidebar = $('.admin-sidebar .sidebar-bottom');
+    if (!sidebar || $('#admin-logout')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'admin-logout';
+    button.className = 'admin-nav reset-store';
+    button.innerHTML = '⏻ <span>Sign out</span>';
+    button.addEventListener('click', () => {
+      if (!confirm('Sign out of the studio workspace?')) return;
+      fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' })
+        .catch(() => { /* even if the call fails, leaving the page is right */ })
+        .then(() => { window.location.href = 'admin-login.html'; });
+    });
+    sidebar.insertBefore(button, sidebar.querySelector('.admin-user'));
+  }
+  window.installLogout = installLogout;
 
   /* -------------------------------------------------------- image picker */
 
@@ -1038,6 +1056,7 @@ function filterOrders(term) {
   });
 
   initShell();
+  installLogout();
   storageBanner();
   setupBanner();
   const boot = PAGES[PAGE];
