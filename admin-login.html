@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 
 <head>
@@ -137,7 +137,7 @@
 
 <body class="login-body">
   <main class="login-card">
-    <img class="brand-logo" src="solids-logo-green-s-light.png" alt="Solids">
+    <img class="brand-logo" src="solids-logo-thread-black-light.png" alt="Solids">
     <h1>Studio sign in</h1>
     <p class="sub">Only the store owner can open this workspace.</p>
 
@@ -154,7 +154,7 @@
       <p class="login-message" id="login-message" role="alert"></p>
     </form>
 
-    <a class="login-back" href="index.html">← Back to the storefront</a>
+    <a class="login-back" href="index.html">â† Back to the storefront</a>
   </main>
 
   <script>
@@ -187,7 +187,7 @@
       form.addEventListener('submit', async event => {
         event.preventDefault();
         submit.disabled = true;
-        say('Signing in…', true);
+        say('Signing inâ€¦', true);
         try {
           const response = await fetch('/api/admin/login', {
             method: 'POST',
@@ -205,7 +205,7 @@
             document.querySelector('#password').focus();
             return;
           }
-          say('Signed in. Opening your workspace…', true);
+          say('Signed in. Opening your workspaceâ€¦', true);
           location.replace(nextPage);
         } catch (error) {
           say('Could not reach the server. Please check your connection.');

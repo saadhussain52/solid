@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 
 <head>
@@ -117,7 +117,7 @@
       word-break: break-word
     }
 
-    /* The long "Cash on delivery — <city> (standard fee)" row header is a
+    /* The long "Cash on delivery â€” <city> (standard fee)" row header is a
        single unbreakable token at 320px, which pushed the whole table past the
        viewport. Let the first cell wrap and shrink. */
     .ship-preview td:first-child {
@@ -209,18 +209,18 @@
 <body class="admin-body admin-page">
   <aside class="admin-sidebar">
     <a class="wordmark admin-logo" href="admin.html" aria-label="Solids home"><img class="brand-logo"
-        src="solids-logo-green-s-light.png" alt="Solids"></a>
+        src="solids-logo-thread-black-light.png" alt="Solids"></a>
     <p class="admin-label">WORKSPACE</p>
     <nav>
-      <a class="admin-nav" href="admin.html">▦ <span>Overview</span></a>
-      <a class="admin-nav" href="products.html">◇ <span>Products &amp; inventory</span></a>
-      <a class="admin-nav" href="orders.html">□ <span>Orders</span></a>
-      <a class="admin-nav" href="categories.html">▧ <span>Categories &amp; banners</span></a>
-      <a class="admin-nav" href="customers.html">○ <span>Customers</span></a>
-      <a class="admin-nav active" href="shipping.html">✈ <span>Delivery &amp; payments</span></a>
+      <a class="admin-nav" href="admin.html">â–¦ <span>Overview</span></a>
+      <a class="admin-nav" href="products.html">â—‡ <span>Products &amp; inventory</span></a>
+      <a class="admin-nav" href="orders.html">â–¡ <span>Orders</span></a>
+      <a class="admin-nav" href="categories.html">â–§ <span>Categories &amp; banners</span></a>
+      <a class="admin-nav" href="customers.html">â—‹ <span>Customers</span></a>
+      <a class="admin-nav active" href="shipping.html">âœˆ <span>Delivery &amp; payments</span></a>
     </nav>
     <div class="sidebar-bottom">
-      <a class="admin-nav" href="index.html">↗ <span>View storefront</span></a>
+      <a class="admin-nav" href="index.html">â†— <span>View storefront</span></a>
       <div class="admin-user">
         <div class="avatar">SA</div>
         <div><strong>Studio Admin</strong><small>solid.pk.official@gmail.com</small></div>
@@ -235,7 +235,7 @@
         <h1>Delivery &amp; payments</h1>
       </div>
       <div class="admin-top-actions">
-        <a class="button button-dark" href="index.html" target="_blank" rel="noopener">View storefront ↗</a>
+        <a class="button button-dark" href="index.html" target="_blank" rel="noopener">View storefront â†—</a>
         <div class="admin-avatar">SA</div>
       </div>
     </header>
@@ -244,7 +244,7 @@
       <div class="page-heading">
         <div>
           <h2>Delivery &amp; payments</h2>
-          <p class="muted">These figures drive the checkout directly — the delivery charge a customer sees, the bank
+          <p class="muted">These figures drive the checkout directly â€” the delivery charge a customer sees, the bank
             details they copy, and the payment options offered. Changes save instantly and apply to the next order.</p>
         </div>
       </div>
@@ -259,18 +259,18 @@
               <!-- step="any" on purpose: a step of 50 made the browser reject any other
                    amount (typing 275 blocked the whole form from saving), so
                    the admin could not set an arbitrary figure. -->
-              <label>Delivery charge — Islamabad &amp; Rawalpindi (Rs.)
+              <label>Delivery charge â€” Islamabad &amp; Rawalpindi (Rs.)
                 <input id="sf-deliveryFee" type="number" min="0" step="any" required>
-                <span class="ship-hint">Shown as “Delivery charges”.</span>
+                <span class="ship-hint">Shown as â€œDelivery chargesâ€.</span>
               </label>
               <label>Free delivery over (Rs.)
                 <input id="sf-freeDeliveryOver" type="number" min="0" step="any" required>
                 <span class="ship-hint" id="sf-freeOver-hint">Own-route orders above this basket value get free
                   delivery. Set to 0 to always charge delivery.</span>
               </label>
-              <label>Shipping charge — all other cities (Rs.)
+              <label>Shipping charge â€” all other cities (Rs.)
                 <input id="sf-shippingFee" type="number" min="0" step="any" required>
-                <span class="ship-hint">Shown as “Shipping charges”.</span>
+                <span class="ship-hint">Shown as â€œShipping chargesâ€.</span>
               </label>
             </div>
           </div>
@@ -328,15 +328,15 @@
         </div>
 
         <div class="ship-bar">
-          <span class="ship-saved" id="ship-saved">Saved — the storefront is using these figures.</span>
+          <span class="ship-saved" id="ship-saved">Saved â€” the storefront is using these figures.</span>
           <button class="button" type="button" id="ship-reset">Revert to defaults</button>
-          <button class="button button-dark" type="submit">Save changes ↗</button>
+          <button class="button button-dark" type="submit">Save changes â†—</button>
         </div>
       </form>
     </section>
   </main>
 
-  <footer class="site-footer"><a class="footer-brand" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-green-s-light.png" alt="Solids — No prints, just style"><p>Everyday, refined.</p></a><div class="footer-links"><div><p class="eyebrow">Explore</p><a href="all.html">Shop all</a><a href="all.html">Collections</a><a href="index.html#shop">New arrivals</a><a href="index.html#about">Our story</a></div><div><p class="eyebrow">Help</p><a href="track.html">Track your order</a><a href="shipping.html">Shipping &amp; returns</a><a href="mailto:solid.pk.official@gmail.com">Contact the studio</a><a class="footer-instagram" data-instagram href="https://www.instagram.com/solids.pk.official" target="_blank" rel="noopener">Instagram <span aria-hidden="true">↗</span></a><span class="footer-phone" data-footer-phone>WhatsApp: +92 341 2782443</span></div><div class="newsletter"><p class="eyebrow">The mailing list</p><p>First look at new drops and quiet notes from the studio.</p><form id="newsletter-form"><input type="email" placeholder="Your email address" required><button aria-label="Subscribe">↗</button></form></div></div><div class="footer-bottom"><span>© 2026 Solids Official</span><span>Pakistan / PKR</span></div></footer>
+  <footer class="site-footer"><a class="footer-brand" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-thread-black-light.png" alt="Solids â€” No prints, just style"><p>Everyday, refined.</p></a><div class="footer-links"><div><p class="eyebrow">Explore</p><a href="all.html">Shop all</a><a href="all.html">Collections</a><a href="index.html#shop">New arrivals</a><a href="index.html#about">Our story</a></div><div><p class="eyebrow">Help</p><a href="track.html">Track your order</a><a href="shipping.html">Shipping &amp; returns</a><a href="mailto:solid.pk.official@gmail.com">Contact the studio</a><a class="footer-instagram" data-instagram href="https://www.instagram.com/solids.pk.official" target="_blank" rel="noopener">Instagram <span aria-hidden="true">â†—</span></a><span class="footer-phone" data-footer-phone>WhatsApp: +92 341 2782443</span></div><div class="newsletter"><p class="eyebrow">The mailing list</p><p>First look at new drops and quiet notes from the studio.</p><form id="newsletter-form"><input type="email" placeholder="Your email address" required><button aria-label="Subscribe">â†—</button></form></div></div><div class="footer-bottom"><span>Â© 2026 Solids Official</span><span>Pakistan / PKR</span></div></footer>
 
   <script src="store-data.js"></script>
   <script>
@@ -388,7 +388,7 @@
       };
 
       /* Quote the live Store so the preview shows exactly what a customer
-         would be charged — same function the checkout calls. The sample
+         would be charged â€” same function the checkout calls. The sample
          basket sits below the threshold, so the free-delivery row is only
          meaningful once the admin raises the amount. */
       const preview = () => {
@@ -414,17 +414,17 @@
         /* Below the threshold: own-route still pays the delivery charge. */
         const threshold = config.freeDeliveryOver;
         const under = threshold > 0 ? Math.max(0, threshold - 1) : 5000;
-        scenario(`Own-route — ${local}`, local, under);
+        scenario(`Own-route â€” ${local}`, local, under);
         if (threshold > 0) {
           /* At the threshold: the same city becomes free, which is the whole
              point of the setting, so show it side by side. */
-          scenario(`Own-route — ${local}, free over ${money(threshold)}`, local, threshold);
+          scenario(`Own-route â€” ${local}, free over ${money(threshold)}`, local, threshold);
         }
         /* Another city: same basket, different tier. */
-        scenario(`Other city — ${other}`, other, under);
+        scenario(`Other city â€” ${other}`, other, under);
         if (threshold > 0) {
           /* Proves the free delivery does not leak into shipping. */
-          scenario(`Other city — ${other}, free over ${money(threshold)}`, other, threshold);
+          scenario(`Other city â€” ${other}, free over ${money(threshold)}`, other, threshold);
         }
 
         document.querySelector('#ship-preview-rows').innerHTML = rows.join('');
