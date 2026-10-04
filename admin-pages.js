@@ -104,6 +104,37 @@
   }
   window.storageBanner = storageBanner;
 
+  /* Product editing is disabled on the server until ADMIN_KEY is set in Railway.
+     That is not something the admin can fix from this page, so it gets a banner
+     that stays up with the exact steps instead of a prompt that goes nowhere. */
+  function setupBanner() {
+    let element = $('#setup-warning');
+    if (!element) {
+      element = document.createElement('div');
+      element.id = 'setup-warning';
+      element.className = 'storage-warning';
+      document.body.appendChild(element);
+    }
+    const paint = message => {
+      element.textContent = message || '';
+      element.classList.toggle('show', Boolean(message));
+    };
+
+    Store.api.serverConfig().then(config => {
+      if (config.adminEditing && config.cloudinary && config.cloudinary.configured) {
+        paint('');
+        return;
+      }
+      const missing = [];
+      if (!config.adminEditing) missing.push('ADMIN_KEY (add it to Railway Variables, then redeploy)');
+      if (!config.cloudinary || !config.cloudinary.configured) missing.push('CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET (image upload)');
+      paint('Product editing is not fully set up on Railway yet. Still missing: ' + missing.join(' · ') + '. See RAILWAY-CLOUDINARY-SETUP.md.');
+    });
+
+    return paint;
+  }
+  window.setupBanner = setupBanner;
+
   /* -------------------------------------------------------- image picker */
 
   /**
@@ -1011,6 +1042,7 @@ function filterOrders(term) {
 
   initShell();
   storageBanner();
+  setupBanner();
   const boot = PAGES[PAGE];
   Store.api.productsReady
     .then(result => {

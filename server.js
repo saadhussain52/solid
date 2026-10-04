@@ -653,8 +653,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url === '/api/config' && method === 'GET') {
+      /* Tells the admin page which setup steps are still missing, so it can say
+         "ADMIN_KEY is not set on Railway" instead of the browser's bare
+         JavaScript prompt that gave no clue what had gone wrong. */
       return json(res, 200, {
         ok: true,
+        adminEditing: Boolean(process.env.ADMIN_KEY),
         cloudinary: {
           cloudName: CLOUDINARY_CLOUD_NAME,
           configured: Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET)

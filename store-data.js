@@ -882,16 +882,40 @@
     online: false,
     productsOnline: false,
     productsConfigured: false,
+    adminEditingEnabled: false,
+    cloudinaryConfigured: false,
+    configPromise: null,
 
     adminKey: function () {
       var key = '';
       try { key = global.sessionStorage.getItem('solids-admin-key') || ''; } catch (error) { /* prompt below */ }
       if (key) return key;
-      key = global.prompt('Enter the Railway ADMIN_KEY to manage products:') || '';
+      key = global.prompt('Enter the Railway ADMIN_KEY to manage products:\n\n(Cancel if you are not sure — product editing stays locked.)') || '';
       if (key) {
+        key = key.trim();
         try { global.sessionStorage.setItem('solids-admin-key', key); } catch (error) { /* use for this request */ }
       }
       return key;
+    },
+
+    /* Whether the server has an ADMIN_KEY at all. Without one, product editing is
+       locked on the server side and no amount of typing in the browser will help,
+       so the admin page has to say so instead of asking for a key pointlessly. */
+    serverConfig: function () {
+      if (api.configPromise) return api.configPromise;
+      api.configPromise = fetch('/api/config')
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          api.adminEditingEnabled = !!data.adminEditing;
+          api.cloudinaryConfigured = !!(data.cloudinary && data.cloudinary.configured);
+          return data;
+        })
+        .catch(function () {
+          api.adminEditingEnabled = false;
+          api.cloudinaryConfigured = false;
+          return { adminEditing: false, cloudinary: { configured: false } };
+        });
+      return api.configPromise;
     },
 
     loadProducts: function () {
@@ -924,7 +948,12 @@
           return response.json().then(function (data) {
             if (response.status === 401) {
               try { global.sessionStorage.removeItem('solids-admin-key'); } catch (error) { /* ignore */ }
-              throw new Error('The ADMIN_KEY was rejected. Check the Railway variable and try again.');
+              throw new Error('The ADMIN_KEY was rejected. Copy it exactly from Railway Variables.');
+            }
+            if (response.status === 503) {
+              /* Not a wrong key — the server has no key at all. Typing into the
+                 prompt can never fix this, so say what actually has to happen. */
+              throw new Error('ADMIN_KEY is not set on Railway, so product editing is locked. Add ADMIN_KEY to the service Variables and redeploy.');
             }
             if (!response.ok) throw new Error(data.error || 'Could not load the shared product catalogue.');
             api.productsOnline = true;
