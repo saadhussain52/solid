@@ -191,7 +191,13 @@
   }
 
   function clearLocalProductCache() {
-    try { localStorage.removeItem(Store.KEYS.products); } catch (error) {
+    /* Belt and braces: Store.write() no longer mirrors the catalogue while Railway
+       is online, but an older tab may still have left a full base64 copy behind.
+       Dropping it is what makes room for the rest of the admin's local settings. */
+    try {
+      localStorage.removeItem(Store.KEYS.products);
+      Store.clearStorageError();
+    } catch (error) {
       throw new Error('Products were saved to Railway, but this browser could not clear its old product-image cache.');
     }
   }
@@ -410,9 +416,11 @@
       if (!sizes.length) { toast('Add at least one size'); return; }
       const image = mainPicker.value;
       if (!image) { toast('Please upload a product image'); return; }
+      const name = $('[data-field="name"]', modal).value.trim();
+      if (!name) { toast('Please enter a product name'); return; }
       const payload = {
         id: index,
-        name: $('[data-field="name"]', modal).value.trim(),
+        name,
         description: $('[data-field="description"]', modal).value.trim(),
         category: $('[data-field="category"]', modal).value,
         price: Number($('[data-field="price"]', modal).value) || 0,
@@ -442,6 +450,8 @@
       }
       try {
         await Store.api.saveProducts(Store.state.products, false);
+        /* The catalogue reached Railway, so nothing was actually lost — the banner
+           from a stale localStorage failure must not stay on screen. */
         clearLocalProductCache();
         modal.classList.remove('show');
         toast(index >= 0 ? 'Product updated' : 'Product added');

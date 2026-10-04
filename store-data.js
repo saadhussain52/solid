@@ -229,18 +229,54 @@
 
   function onStorageError(listener) { storageListeners.push(listener); }
 
+  function announce(message) {
+    lastWriteError = message;
+    storageListeners.forEach(function (listener) {
+      try { listener(lastWriteError); } catch (ignored) { /* a bad listener must not break a save */ }
+    });
+  }
+
+  function clearStorageError() { announce(null); }
+
+  /* Product photos are the only thing big enough to blow the ~5MB quota, so when a
+     write is refused the culprit is always this key. It is also the only key whose
+     contents are a *copy*: Railway is the source of truth, so dropping the copy is
+     safe and frees the space the rest of the app needs. */
+  function dropProductCache() {
+    try {
+      global.localStorage.removeItem(KEYS.products);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
   function write(key, value) {
+    /* Never mirror the catalogue into the browser once Railway answers for it.
+       Older builds did that, which is how the browser filled up with base64
+       photos and started warning even though the site itself was live. */
+    if (key === KEYS.products && api && api.productsOnline) {
+      lastWriteError = null;
+      return true;
+    }
     try {
       global.localStorage.setItem(key, JSON.stringify(value));
       lastWriteError = null;
       return true;
     } catch (error) {
+      if (error && error.name === 'QuotaExceededError' && key !== KEYS.products && dropProductCache()) {
+        /* One retry after freeing the stale product copy; only give up if the
+           refusal had nothing to do with photos. */
+        try {
+          global.localStorage.setItem(key, JSON.stringify(value));
+          lastWriteError = null;
+          return true;
+        } catch (retryError) { /* fall through to the report below */ }
+      }
       lastWriteError = (error && error.name === 'QuotaExceededError')
-        ? 'Browser storage is full — your product photos are too large. Use smaller images, or delete an old product.'
+        ? 'This browser is out of storage space. Product photos now live on Cloudinary and Railway, so use a smaller image and reload this page.'
         : 'This browser is blocking storage (private mode?), so nothing was saved.';
-      storageListeners.forEach(function (listener) {
-        try { listener(lastWriteError); } catch (ignored) { /* a bad listener must not break a save */ }
-      });
+      announce(lastWriteError);
       return false;
     }
   }
@@ -1005,6 +1041,10 @@
        disappears, when a write to localStorage was refused. */
     storageError: function () { return lastWriteError; },
     onStorageError: onStorageError,
+    /* A save that reached Railway proves the browser is fine, so a banner left over
+       from an earlier failed local write has to come down. */
+    clearStorageError: clearStorageError,
+    releaseProductCache: dropProductCache,
     state: state,
     save: save,
     sizeOf: sizeOf,
