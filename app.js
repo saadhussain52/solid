@@ -139,7 +139,7 @@
         <div class="collection-label">
           <span>${String(index + 1).padStart(2, '0')}</span>
           <strong>${escapeHtml(collection.name).toUpperCase()}</strong>
-          <em>Shop now ↗</em>
+          <em>Shop now &#8599;</em>
         </div>
       </a>`).join('');
   };
@@ -461,7 +461,7 @@
 
               <div class="modal-actions">
                 <button type="button" class="button" data-close-checkout>Cancel</button>
-                <button type="submit" class="button button-dark" id="co-submit">Confirm order ↗</button>
+                <button type="submit" class="button button-dark" id="co-submit">Confirm order &#8599;</button>
               </div>
             </form>
           </div>
@@ -588,7 +588,7 @@
     if (hint) hint.textContent = cityChargeHint();
 
     const submit = modal.querySelector('#co-submit');
-    if (submit) submit.textContent = `Confirm order · ${money(quote.total)} ↗`;
+    if (submit) submit.textContent = `Confirm order · ${money(quote.total)} \u2197`;
     paintBankDetails(modal);
   }
 
@@ -841,13 +841,13 @@
     const deliveryBlock = mailed ? `
         <p class="confirm-track-note">We have emailed your tracking link to <strong>${escapeHtml(order.email)}</strong>. Open it on any device and paste your tracking ID to follow the parcel.</p>
         <div class="confirm-actions">
-          <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order ↗</a>
+          <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order &#8599;</a>
           <a class="button" href="track.html?id=${encodeURIComponent(order.trackingId)}">Open tracking page</a>
         </div>` : `
         <p class="confirm-track-note">The studio has not received this order yet, and this page cannot email it. Use the button below to send it — it opens your email app with everything filled in. <strong>Save your tracking link below</strong> so you can follow the parcel from any device.</p>
         <div class="confirm-actions">
-          <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order ↗</a>
-          <a class="button confirm-send" href="${escapeAttr(mailtoHref)}">Send order to ${escapeHtml(config.supportEmail)} ↗</a>
+          <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order &#8599;</a>
+          <a class="button confirm-send" href="${escapeAttr(mailtoHref)}">Send order to ${escapeHtml(config.supportEmail)} &#8599;</a>
         </div>`;
 
     modal.innerHTML = `
