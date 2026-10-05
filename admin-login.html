@@ -1,12 +1,12 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>solid.official.pk</title>
-  <link rel="icon" type="image/png" href="favicon.png?v=2">
+  <title>Studio sign in | Solids</title>
+  <link rel="icon" type="image/png" href="favicon.png?v=3" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -155,7 +155,7 @@
       <p class="login-message" id="login-message" role="alert"></p>
     </form>
 
-    <a class="login-back" href="index.html">â† Back to the storefront</a>
+    <a class="login-back" href="index.html">← Back to the storefront</a>
   </main>
 
   <script>
@@ -188,7 +188,7 @@
       form.addEventListener('submit', async event => {
         event.preventDefault();
         submit.disabled = true;
-        say('Signing inâ€¦', true);
+        say('Signing in…', true);
         try {
           const response = await fetch('/api/admin/login', {
             method: 'POST',
@@ -206,7 +206,7 @@
             document.querySelector('#password').focus();
             return;
           }
-          say('Signed in. Opening your workspaceâ€¦', true);
+          say('Signed in. Opening your workspace…', true);
           location.replace(nextPage);
         } catch (error) {
           say('Could not reach the server. Please check your connection.');
