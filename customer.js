@@ -51,8 +51,10 @@
     });
     const count = document.querySelector('[data-header-wishlist-count]');
     if (count) {
-      count.textContent = wishlist.size;
-      count.hidden = wishlist.size === 0;
+      const nextCount = String(wishlist.size);
+      if (count.textContent !== nextCount) count.textContent = nextCount;
+      const isHidden = wishlist.size === 0;
+      if (count.hidden !== isHidden) count.hidden = isHidden;
     }
   }
 
