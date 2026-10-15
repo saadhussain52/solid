@@ -137,7 +137,7 @@
     if (!list.length) { collectionGrid.innerHTML = '<p class="muted">No collections yet.</p>'; return; }
     collectionGrid.innerHTML = list.map((collection, index) => `
       <a class="collection-card${index === 0 ? ' collection-tall' : ''}" href="all.html?category=${slugify(collection.name)}">
-        <img src="${escapeHtml(collectionImage(collection))}" alt="${escapeHtml(collection.name)}">
+        <img src="${escapeHtml(collectionImage(collection))}" alt="${escapeHtml(collection.name)}" loading="lazy" decoding="async">
         <div class="collection-label">
           <span>${String(index + 1).padStart(2, '0')}</span>
           <strong>${escapeHtml(collection.name).toUpperCase()}</strong>
@@ -209,7 +209,7 @@
         return `<article class="product-card${status.key === 'sold-out' ? ' is-sold-out' : ''}">
           <div class="product-image">
             <a class="product-link" href="product.html?product=${index}" aria-label="View ${escapeHtml(product.name)}">
-              <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">
+              <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async">
             </a>
             ${wishlistButton(index)}
             ${product.tag ? `<span class="product-badge">${escapeHtml(product.tag)}</span>` : ''}

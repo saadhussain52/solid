@@ -973,7 +973,12 @@
     },
 
     loadProducts: function () {
-      return fetch('/api/products')
+      /* app.js waits for this initial result before wiring up the storefront.
+         Bound the wait so a sleeping or unreachable API cannot leave the page
+         unusable forever; the locally stored/default catalogue remains usable. */
+      var controller = new global.AbortController();
+      var timeout = global.setTimeout(function () { controller.abort(); }, 5000);
+      return fetch('/api/products', { signal: controller.signal })
         .then(function (response) {
           if (!response.ok) throw new Error('Product API ' + response.status);
           return response.json();
@@ -990,8 +995,12 @@
         .catch(function (error) {
           api.productsOnline = false;
           api.productsConfigured = false;
-          return { online: false, configured: false, error: error.message };
-        });
+          var message = error.name === 'AbortError'
+            ? 'Product API request timed out after 5 seconds'
+            : error.message;
+          return { online: false, configured: false, error: message };
+        })
+        .finally(function () { global.clearTimeout(timeout); });
     },
 
     /* A 401 anywhere means the session expired or was signed out. Sending the
