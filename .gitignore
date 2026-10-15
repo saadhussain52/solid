@@ -13,11 +13,17 @@ node_modules/
 
 # Test scratch files from local runs
 _*.mjs
+_*.cjs
 _*.json
 _*.txt
 _*.log
+_*.png
 shot-*.png
 _out.*
+t2.html
+
+# Local QA login helper scripts
+qa-*.mjs
 
 # One-off audit captures from responsive checks
 CHECK-*.png

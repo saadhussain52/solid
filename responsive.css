@@ -218,10 +218,10 @@
 .size-row {
   display: grid;
   grid-template-columns:
-    minmax(96px, .8fr) minmax(104px, .85fr) minmax(124px, 1.1fr) minmax(124px, 1.1fr) minmax(80px, .6fr) 34px;
+    minmax(72px, .7fr) minmax(84px, .8fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(64px, .55fr) 34px;
   gap: 12px;
   align-items: end;
-  min-width: 640px
+  min-width: 760px
 }
 
 .size-table-head {

@@ -70,6 +70,7 @@ const dataDir = process.env.DATA_DIR
   : path.join(root, 'data');
 const ordersFile = path.join(dataDir, 'orders.json');
 const productsFile = path.join(dataDir, 'products.json');
+const accountsFile = path.join(dataDir, 'accounts.json');
 /* Product photos live here. Keeping them on the same volume as the catalogue
    means the site works without any third-party image account: the admin picks a
    file, the server stores it, and the catalogue only ever holds a short URL. */
@@ -121,6 +122,27 @@ const saveProducts = products => {
   productsCache = products;
 };
 
+let accountsCache = null;
+
+const loadAccounts = () => {
+  if (accountsCache) return accountsCache;
+  try {
+    accountsCache = JSON.parse(fs.readFileSync(accountsFile, 'utf8'));
+    if (!Array.isArray(accountsCache)) accountsCache = [];
+  } catch (error) {
+    accountsCache = [];
+  }
+  return accountsCache;
+};
+
+const saveAccounts = accounts => {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const temp = accountsFile + '.tmp';
+  fs.writeFileSync(temp, JSON.stringify(accounts, null, 2));
+  fs.renameSync(temp, accountsFile);
+  accountsCache = accounts;
+};
+
 /* ------------------------------------------------------------ admin sessions
 
    The admin panel is guarded by a real signed-cookie session rather than a key
@@ -158,6 +180,106 @@ const sessionValid = id => {
 };
 
 const SESSION_COOKIE = 'solids_admin';
+const CUSTOMER_SESSION_COOKIE = 'solids_customer';
+const customerSessions = new Map();
+
+const customerForRequest = req => {
+  const id = readCookie(req, CUSTOMER_SESSION_COOKIE);
+  const session = customerSessions.get(id);
+  if (!session) return null;
+  if (Date.now() > session.expiresAt) {
+    customerSessions.delete(id);
+    return null;
+  }
+  return loadAccounts().find(account => account.id === session.accountId) || null;
+};
+
+const startCustomerSession = (req, res, account) => {
+  const id = crypto.randomBytes(32).toString('hex');
+  customerSessions.set(id, { accountId: account.id, expiresAt: Date.now() + SESSION_TTL_MS });
+  const secure = req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', CUSTOMER_SESSION_COOKIE + '=' + id + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + Math.floor(SESSION_TTL_MS / 1000) + secure);
+};
+
+const clearCustomerSession = (req, res) => {
+  customerSessions.delete(readCookie(req, CUSTOMER_SESSION_COOKIE));
+  res.setHeader('Set-Cookie', CUSTOMER_SESSION_COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+};
+
+const publicAccount = account => ({
+  name: account.name,
+  email: account.email,
+  createdAt: account.createdAt,
+  lastSignInAt: account.lastSignInAt,
+  signInCount: account.signInCount,
+  wishlist: account.wishlist || []
+});
+
+const derivePassword = (password, salt) => new Promise((resolve, reject) => {
+  crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (error, key) => {
+    if (error) reject(error);
+    else resolve(key.toString('hex'));
+  });
+});
+
+const adminCustomerReport = () => {
+  const contacts = new Map();
+  loadOrders().forEach(order => {
+    const email = String(order.email || '').trim().toLowerCase();
+    if (!email) return;
+    const contact = contacts.get(email) || { name: order.customer || 'Customer', email, orders: 0, spent: 0 };
+    contact.orders += 1;
+    if (order.status !== 'Cancelled') {
+      contact.spent += (order.items || []).reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+    }
+    contacts.set(email, contact);
+  });
+
+  const products = loadProducts() || [];
+  const accounts = loadAccounts();
+  const customers = new Map(contacts);
+  accounts.forEach(account => {
+    const email = String(account.email).toLowerCase();
+    const contact = customers.get(email) || { name: account.name, email, orders: 0, spent: 0 };
+    const wishlist = (account.wishlist || []).map(Number).filter(index => products[index]).map(index => ({
+      productIndex: index,
+      name: products[index].name,
+      image: products[index].image
+    }));
+    customers.set(email, Object.assign(contact, {
+      name: account.name,
+      registered: true,
+      createdAt: account.createdAt,
+      lastSignInAt: account.lastSignInAt,
+      signInCount: Number(account.signInCount) || 0,
+      wishlist
+    }));
+  });
+
+  const rows = Array.from(customers.values()).map(customer => Object.assign({
+    registered: false,
+    signInCount: 0,
+    wishlist: []
+  }, customer));
+  const wishlisted = new Map();
+  rows.forEach(customer => customer.wishlist.forEach(product => {
+    const entry = wishlisted.get(product.productIndex) || { productIndex: product.productIndex, name: product.name, customers: [] };
+    entry.customers.push({ name: customer.name, email: customer.email });
+    wishlisted.set(product.productIndex, entry);
+  }));
+
+  return {
+    customers: rows.sort((a, b) => a.name.localeCompare(b.name)),
+    metrics: {
+      registered: accounts.length,
+      guests: rows.filter(customer => !customer.registered).length,
+      signedIn: accounts.filter(account => account.lastSignInAt).length,
+      signIns: accounts.reduce((sum, account) => sum + (Number(account.signInCount) || 0), 0),
+      wishlistEntries: rows.reduce((sum, customer) => sum + customer.wishlist.length, 0)
+    },
+    wishlistedProducts: Array.from(wishlisted.values()).sort((a, b) => b.customers.length - a.customers.length)
+  };
+};
 
 /* Reads the session id from the cookie header without pulling in a cookie parser
    dependency for a single value. */
@@ -177,6 +299,7 @@ const readCookie = (req, name) => {
 setInterval(() => {
   const now = Date.now();
   sessions.forEach((expiry, id) => { if (now > expiry) sessions.delete(id); });
+  customerSessions.forEach((session, id) => { if (now > session.expiresAt) customerSessions.delete(id); });
 }, 1000 * 60 * 30).unref();
 
 /* Constant-time string compare that does not leak length through an early exit. */
@@ -198,30 +321,31 @@ const MAX_ATTEMPTS = 6;
 const LOCKOUT_MS = 1000 * 60 * 10;
 /* Named apart from the order-lookup counter further down, which is unrelated. */
 const loginFailures = new Map();
+const customerLoginFailures = new Map();
 
 const clientAddress = req => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
   || req.socket.remoteAddress || 'unknown';
 
-const loginBlockedFor = address => {
-  const record = loginFailures.get(address);
+const loginBlockedFor = (address, failures = loginFailures) => {
+  const record = failures.get(address);
   if (!record || !record.until) return 0;
   const remaining = record.until - Date.now();
   if (remaining <= 0) {
-    loginFailures.delete(address);
+    failures.delete(address);
     return 0;
   }
   return remaining;
 };
 
-const noteFailedLogin = address => {
-  const record = loginFailures.get(address) || { count: 0, until: 0 };
+const noteFailedLogin = (address, failures = loginFailures) => {
+  const record = failures.get(address) || { count: 0, until: 0 };
   record.count += 1;
   if (record.count >= MAX_ATTEMPTS) {
     record.until = Date.now() + LOCKOUT_MS;
     record.count = 0;
     console.warn('[login] too many failures from ' + address + ' - locked out for ' + Math.round(LOCKOUT_MS / 60000) + ' minutes');
   }
-  loginFailures.set(address, record);
+  failures.set(address, record);
 };
 
 /* True when the caller holds a valid admin session cookie. */
@@ -247,6 +371,17 @@ const publicProducts = products => products && products.map(product => {
       const visibleSize = { ...size };
       delete visibleSize.cost;
       return visibleSize;
+    });
+  }
+  if (visible.colorVariants && typeof visible.colorVariants === 'object') {
+    Object.keys(visible.colorVariants).forEach(color => {
+      if (Array.isArray(visible.colorVariants[color])) {
+        visible.colorVariants[color] = visible.colorVariants[color].map(size => {
+          const visibleSize = { ...size };
+          delete visibleSize.cost;
+          return visibleSize;
+        });
+      }
     });
   }
   return visible;
@@ -664,12 +799,25 @@ const handleCreate = async (req, res) => {
       order.items.forEach(item => {
         const product = products.find(candidate => candidate.name === item.name);
         if (!product) return;
-        const size = (product.sizes || []).find(candidate => candidate.label === item.size);
+        const colorSizes = product.colorVariants && Array.isArray(product.colorVariants[item.color])
+          ? product.colorVariants[item.color]
+          : null;
+        const size = (colorSizes || product.sizes || []).find(candidate => candidate.label === item.size);
         const quantity = Math.max(0, Number(item.qty) || 1);
         if (size) {
           size.stock = Math.max(0, (Number(size.stock) || 0) - quantity);
           size.sold = (Number(size.sold) || 0) + quantity;
-          product.sold = (product.sizes || []).reduce((sum, entry) => sum + (Number(entry.sold) || 0), 0);
+          if (colorSizes) {
+            const aggregate = (product.sizes || []).find(candidate => candidate.label === item.size);
+            if (aggregate) {
+              aggregate.stock = Math.max(0, (Number(aggregate.stock) || 0) - quantity);
+              aggregate.sold = (Number(aggregate.sold) || 0) + quantity;
+            }
+            product.sold = Object.keys(product.colorVariants).reduce((sum, color) =>
+              sum + (product.colorVariants[color] || []).reduce((colorSum, entry) => colorSum + (Number(entry.sold) || 0), 0), 0);
+          } else {
+            product.sold = (product.sizes || []).reduce((sum, entry) => sum + (Number(entry.sold) || 0), 0);
+          }
         } else {
           product.stock = Math.max(0, (Number(product.stock) || 0) - quantity);
           product.sold = (Number(product.sold) || 0) + quantity;
@@ -819,6 +967,104 @@ const server = http.createServer(async (req, res) => {
         dataWritable: writable,
         mail: RESEND_API_KEY ? 'on' : 'off'
       });
+    }
+
+    if (url === '/api/account/signup' && method === 'POST') {
+      let body;
+      try { body = await readBody(req, 5000); }
+      catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+      const name = String(body.name || '').trim().slice(0, 100);
+      const email = String(body.email || '').trim().toLowerCase();
+      const password = String(body.password || '');
+      if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 160) {
+        return json(res, 400, { ok: false, error: 'Enter your name and a valid email address.' });
+      }
+      if (password.length < 8 || password.length > 128) {
+        return json(res, 400, { ok: false, error: 'Password must be between 8 and 128 characters.' });
+      }
+      const accounts = loadAccounts();
+      if (accounts.some(account => account.email === email)) {
+        return json(res, 409, { ok: false, error: 'An account with this email already exists. Please sign in.' });
+      }
+      const salt = crypto.randomBytes(16).toString('hex');
+      const now = new Date().toISOString();
+      const account = {
+        id: crypto.randomUUID(),
+        name,
+        email,
+        salt,
+        passwordHash: await derivePassword(password, salt),
+        createdAt: now,
+        lastSignInAt: now,
+        signInCount: 1,
+        wishlist: []
+      };
+      accounts.push(account);
+      saveAccounts(accounts);
+      startCustomerSession(req, res, account);
+      return json(res, 201, { ok: true, user: publicAccount(account) });
+    }
+
+    if (url === '/api/account/login' && method === 'POST') {
+      const address = clientAddress(req);
+      const blockedFor = loginBlockedFor(address, customerLoginFailures);
+      if (blockedFor > 0) {
+        return json(res, 429, { ok: false, error: 'Too many failed sign-in attempts. Try again in ' + Math.ceil(blockedFor / 60000) + ' minutes.' });
+      }
+      let body;
+      try { body = await readBody(req, 5000); }
+      catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+      const email = String(body.email || '').trim().toLowerCase();
+      const password = String(body.password || '');
+      const account = loadAccounts().find(candidate => candidate.email === email);
+      const salt = account ? account.salt : '0'.repeat(32);
+      const actualHash = await derivePassword(password.slice(0, 128), salt);
+      const expectedHash = account ? account.passwordHash : '0'.repeat(128);
+      if (!account || !safeEqual(actualHash, expectedHash)) {
+        noteFailedLogin(address, customerLoginFailures);
+        return json(res, 401, { ok: false, error: 'Email or password is incorrect.' });
+      }
+      customerLoginFailures.delete(address);
+      account.lastSignInAt = new Date().toISOString();
+      account.signInCount = (Number(account.signInCount) || 0) + 1;
+      saveAccounts(loadAccounts());
+      startCustomerSession(req, res, account);
+      return json(res, 200, { ok: true, user: publicAccount(account) });
+    }
+
+    if (url === '/api/account/session' && method === 'GET') {
+      const account = customerForRequest(req);
+      return json(res, 200, { ok: true, signedIn: Boolean(account), user: account ? publicAccount(account) : null });
+    }
+
+    if (url === '/api/account/logout' && method === 'POST') {
+      clearCustomerSession(req, res);
+      return json(res, 200, { ok: true });
+    }
+
+    if (url === '/api/account/wishlist' && (method === 'GET' || method === 'PUT')) {
+      const account = customerForRequest(req);
+      if (!account) return json(res, 401, { ok: false, error: 'Sign in to use your wishlist.' });
+      if (method === 'GET') return json(res, 200, { ok: true, wishlist: account.wishlist || [] });
+      let body;
+      try { body = await readBody(req, 5000); }
+      catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+      const productIndex = Number(body.productIndex);
+      const products = loadProducts() || [];
+      if (!Number.isInteger(productIndex) || !products[productIndex]) {
+        return json(res, 400, { ok: false, error: 'That product is not in the catalogue.' });
+      }
+      const wishlist = new Set((account.wishlist || []).map(Number));
+      if (body.saved) wishlist.add(productIndex);
+      else wishlist.delete(productIndex);
+      account.wishlist = Array.from(wishlist).sort((a, b) => a - b).slice(0, 200);
+      saveAccounts(loadAccounts());
+      return json(res, 200, { ok: true, wishlist: account.wishlist });
+    }
+
+    if (url === '/api/admin/customers' && method === 'GET') {
+      if (!requireAdmin(req, res)) return;
+      return json(res, 200, { ok: true, ...adminCustomerReport() });
     }
 
     /* POST /api/admin/login — checks the credentials and hands back a session

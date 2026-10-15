@@ -224,7 +224,12 @@
     product.gallery = await Promise.all((product.gallery || []).map(upload));
     for (const field of ['colorImages', 'colorMasks']) {
       const images = product[field] || {};
-      for (const key of Object.keys(images)) images[key] = await upload(images[key]);
+      for (const key of Object.keys(images)) {
+        // Each colour can hold one picture or a list of pictures.
+        images[key] = Array.isArray(images[key])
+          ? await Promise.all(images[key].map(upload))
+          : await upload(images[key]);
+      }
       product[field] = images;
     }
     return product;
@@ -250,10 +255,10 @@
 
   const SIZE_PRESETS = Store.SIZE_PRESETS;
 
-  function sizeRows(sizes) {
+  function sizeRows(sizes, colorIndex) {
     return `<div class="size-table">
-      <div class="size-table-head"><span>SIZE</span><span>IN STOCK</span><span>UNIT COST (Rs.)</span><span>SELL PRICE (Rs.)</span><span>SOLD</span><span></span></div>
-      <div data-size-rows>
+      <div class="size-table-head"><span>SIZE</span><span>IN STOCK</span><span>UNIT COST (Rs.)</span><span>SELL PRICE (Rs.)</span><span>WAS PRICE (Rs.)</span><span>SOLD</span><span></span></div>
+      <div data-size-rows data-variant-size-rows="${colorIndex}">
         ${sizes.map((size, index) => sizeRowHtml(size, index)).join('')}
       </div>
       <div class="size-table-foot">
@@ -275,6 +280,7 @@
       <label class="size-field"><span>IN STOCK</span><input type="number" min="0" data-size-stock value="${Number(size.stock) || 0}"></label>
       <label class="size-field"><span>UNIT COST (Rs.)</span><input type="number" min="0" data-size-cost value="${Number(size.cost) || 0}"></label>
       <label class="size-field"><span>SELL PRICE (Rs.)</span><input type="number" min="0" data-size-price value="${Number(size.price) || 0}"></label>
+      <label class="size-field"><span>WAS PRICE (Rs.)</span><input type="number" min="0" data-size-compare-price value="${Number(size.compareAtPrice) || 0}" placeholder="Optional"></label>
       <label class="size-field"><span>SOLD</span><input type="number" min="0" data-size-sold value="${Number(size.sold) || 0}"></label>
       <button type="button" class="row-danger" data-remove-size="${index}" title="Remove size">×</button>
     </div>`;
@@ -286,21 +292,26 @@
       stock: Number($('[data-size-stock]', row).value) || 0,
       cost: Number($('[data-size-cost]', row).value) || 0,
       price: Number($('[data-size-price]', row).value) || 0,
+      compareAtPrice: Number($('[data-size-compare-price]', row).value) || 0,
       sold: Number($('[data-size-sold]', row).value) || 0
     }))
     .filter(size => size.label);
 
   function updateSizeTotals(root) {
-    const sizes = readSizes(root);
-    const stock = sizes.reduce((sum, size) => sum + size.stock, 0);
-    const sold = sizes.reduce((sum, size) => sum + size.sold, 0);
-    const soldOut = sizes.filter(size => size.stock <= 0).map(size => size.label);
-    const target = $('[data-size-totals]', root);
-    if (target) {
-      target.innerHTML = `<b>${stock}</b> units in stock · <b>${sold}</b> sold${soldOut.length ? ` · <em class="danger-text">${soldOut.join(', ')} unavailable</em>` : ''}`;
-    }
-    $$('[data-size-row]', root).forEach(row => {
-      row.classList.toggle('is-out', Number($('[data-size-stock]', row).value) <= 0);
+    let stock = 0;
+    let sold = 0;
+    $$('[data-size-rows]', root).forEach(tableRows => {
+      const sizes = readSizes(tableRows);
+      const tableStock = sizes.reduce((sum, size) => sum + size.stock, 0);
+      const tableSold = sizes.reduce((sum, size) => sum + size.sold, 0);
+      const soldOut = sizes.filter(size => size.stock <= 0).map(size => size.label);
+      stock += tableStock;
+      sold += tableSold;
+      const target = $('[data-size-totals]', tableRows.closest('.size-table'));
+      if (target) target.innerHTML = `<b>${tableStock}</b> in stock · <b>${tableSold}</b> sold${soldOut.length ? ` · <em class="danger-text">${soldOut.join(', ')} unavailable</em>` : ''}`;
+      $$('[data-size-row]', tableRows).forEach(row => {
+        row.classList.toggle('is-out', Number($('[data-size-stock]', row).value) <= 0);
+      });
     });
     const statusLine = $('[data-editor-stock-status]', root);
     if (statusLine) {
@@ -347,11 +358,18 @@
           <div class="editor-main">
             <label>Product name<input data-field="name" value="${escapeHtml(product ? product.name : '')}" required></label>
             <label>Description<textarea data-field="description" rows="3">${escapeHtml(product ? product.description : '')}</textarea></label>
-            <label>Colours<input data-field="colors" value="${escapeHtml(product ? product.colors.join(', ') : 'Bone, Black')}"></label>
 
-            <h4 class="editor-subhead">Sizes, stock &amp; pricing</h4>
-            <p class="editor-hint">Set how many units you have per size, what each unit costs you, and the selling price for that exact size. Any size with 0 stock is automatically cut through on the website.</p>
-            ${sizeRows(sizes)}
+            <h4 class="editor-subhead">Colours &amp; colour pictures</h4>
+            <p class="editor-hint">Add each colour and upload the picture(s) for that colour. The first colour's first picture becomes the product's main photo, and every picture you add here fills the product gallery. When a customer clicks a colour on the website, that colour's exact pictures appear in its place.</p>
+            <div class="color-editor" data-color-editor>
+              <div class="color-editor-rows" data-color-rows></div>
+              <div class="color-editor-foot">
+                <button type="button" class="button button-small" data-add-color>Add colour</button>
+              </div>
+            </div>
+
+            <h4 class="editor-subhead">Sizes, stock &amp; pricing by colour</h4>
+            <p class="editor-hint">Set stock and prices separately for every colour and size. Add an optional was price to show a crossed-out sale price on the website.</p>
 
             <h4 class="editor-subhead">Base price &amp; badge</h4>
             <div class="form-columns">
@@ -366,76 +384,152 @@
               ${Store.state.categories.filter(category => category !== 'New Arrivals')
                 .map(category => `<option value="${slugify(category)}"${product && product.category === slugify(category) ? ' selected' : ''}>${escapeHtml(category)}</option>`).join('')}
             </select></label>
-            <div data-main-image></div>
-            <div data-gallery-images></div>
+            <p class="editor-hint">Product photos now come from the colours above — the first picture you add is used as the main image, and the rest appear in the gallery.</p>
           </aside>
         </div>
       </form>`;
 
-    // main image
-    const mainSlot = $('[data-main-image]', modal);
-    const mainPicker = imagePicker({
-      label: 'Product image',
-      value: product ? product.image : '',
-      onChange: () => { }
-    });
-    mainSlot.appendChild(mainPicker.element);
+    /* ------------------------------------------------- colour pictures
+       Every colour the admin adds can carry its own picture(s). The storefront
+       swaps to these exact photos when a shopper clicks the matching colour. */
+    const colorRowsHost = $('[data-color-rows]', modal);
+    let colorEntries = [];
 
-    // gallery
-    const gallerySlot = $('[data-gallery-images]', modal);
-    const galleryWrap = document.createElement('div');
-    galleryWrap.className = 'gallery-editor';
-    galleryWrap.innerHTML = '<span class="picker-label">Gallery images</span><small class="file-help">Extra photos shown on the product page</small><div class="gallery-grid" data-gallery-grid></div><button type="button" class="button button-small ghost" data-add-gallery>Add image</button>';
-    const galleryGrid = $('[data-gallery-grid]', galleryWrap);
-    let gallery = product && product.gallery && product.gallery.length ? product.gallery.slice() : (product ? [product.image] : []);
-    const paintGallery = () => {
-      galleryGrid.innerHTML = gallery.map((source, index) =>
-        `<div class="gallery-cell"><img src="${escapeHtml(source)}" alt=""><button type="button" data-remove-gallery="${index}">×</button></div>`).join('') || '<span class="file-help">No gallery images yet.</span>';
-      $$('[data-remove-gallery]', galleryGrid).forEach(button => button.addEventListener('click', () => {
-        gallery.splice(Number(button.dataset.removeGallery), 1);
-        paintGallery();
-      }));
-    };
-    paintGallery();
-    $('[data-add-gallery]', galleryWrap).addEventListener('click', async () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async () => {
-        const file = input.files[0];
-        if (file) { gallery.push(await readImage(file)); paintGallery(); }
-      };
-      input.click();
-    });
-    gallerySlot.appendChild(galleryWrap);
-
-    // category -> size preset hints
-    const sizeHost = $('[data-size-rows]', modal);
-    const bindSizeEvents = () => {
-      $('[data-add-size]', modal).onclick = () => {
-        sizeHost.insertAdjacentHTML('beforeend', sizeRowHtml({ label: '', stock: 0, cost: Math.round(Number($('[data-field="cost"]', modal).value) * 0.45) || 0, price: Number($('[data-field="price"]', modal).value) || 0, sold: 0 }, $$('[data-size-row]', modal).length));
-        updateSizeTotals(modal);
-      };
-      $('[data-size-preset]', modal).onchange = event => {
-        const preset = SIZE_PRESETS[event.target.value];
-        event.target.value = '';
-        if (!preset) return;
-        const basePrice = Number($('[data-field="price"]', modal).value) || 0;
-        const baseCost = Math.round(basePrice * 0.45);
-        const existing = readSizes(modal).map(size => size.label);
-        preset.filter(label => !existing.includes(label)).forEach((label, offset) => {
-          sizeHost.insertAdjacentHTML('beforeend', sizeRowHtml({ label, stock: 0, cost: baseCost, price: basePrice + offset * 200, sold: 0 }, $$('[data-size-row]', modal).length));
+    // Normalise whatever is already saved (string URL or array of URLs) into rows.
+    const readSavedColors = () => {
+      const saved = product && product.colorImages && typeof product.colorImages === 'object' ? product.colorImages : {};
+      const known = product && Array.isArray(product.colors) ? product.colors : [];
+      const names = known.concat(Object.keys(saved)).filter((name, position, list) => name && list.indexOf(name) === position);
+      const savedVariants = product && product.colorVariants && typeof product.colorVariants === 'object' ? product.colorVariants : {};
+      return names.map((name, colorIndex) => {
+        const value = saved[name];
+        const images = Array.isArray(value) ? value.filter(Boolean) : (typeof value === 'string' && value ? [value] : []);
+        const source = Array.isArray(savedVariants[name]) ? savedVariants[name] : sizes;
+        const divisor = Math.max(1, names.length);
+        const variantSizes = source.map(size => {
+          const stock = Number(size.stock) || 0;
+          const sold = Number(size.sold) || 0;
+          return Object.assign({}, size, {
+            stock: Array.isArray(savedVariants[name]) ? stock : Math.floor(stock / divisor) + (colorIndex < stock % divisor ? 1 : 0),
+            sold: Array.isArray(savedVariants[name]) ? sold : Math.floor(sold / divisor) + (colorIndex < sold % divisor ? 1 : 0)
+          });
         });
-        updateSizeTotals(modal);
-      };
-      modal.addEventListener('click', event => {
-        const remove = event.target.closest('[data-remove-size]');
-        if (!remove) return;
-        remove.closest('[data-size-row]').remove();
-        updateSizeTotals(modal);
+        return { name, images, sizes: variantSizes };
       });
     };
-    bindSizeEvents();
+    colorEntries = readSavedColors();
+
+    const paintColors = () => {
+      colorRowsHost.innerHTML = colorEntries.map((entry, rowIndex) => `
+        <div class="color-editor-row" data-color-row="${rowIndex}">
+          <div class="color-editor-head">
+            <input class="color-name-input" data-color-name value="${escapeHtml(entry.name)}" placeholder="Colour name e.g. Snow">
+            <button type="button" class="button button-small" data-add-color-image>+ Add pictures</button>
+            <button type="button" class="button button-small ghost" data-remove-color>Remove colour</button>
+          </div>
+          <div class="color-editor-images color-thumbs" data-color-images>
+            ${entry.images.map((source, imageIndex) => `
+              <div class="color-thumb">
+                <img src="${escapeHtml(source)}" alt="">
+                <button type="button" data-remove-color-image="${imageIndex}" title="Remove picture">×</button>
+              </div>`).join('')}
+            <button type="button" class="color-thumb-add" data-add-color-image title="Add more pictures">
+              <span aria-hidden="true">+</span>Add pictures
+            </button>
+          </div>
+          <small class="file-help">${entry.images.length ? entry.images.length + ' picture' + (entry.images.length > 1 ? 's' : '') + ' added. The first one is this colour\'s main photo.' : 'No picture for this colour yet — click “Add pictures”.'}</small>
+          <div class="color-inventory">
+            <strong data-variant-title>Sizes &amp; stock · ${escapeHtml(entry.name || 'Colour ' + (rowIndex + 1))}</strong>
+            ${sizeRows(entry.sizes, rowIndex)}
+          </div>
+        </div>`).join('') || '<span class="file-help">No colours added yet.</span>';
+    };
+    paintColors();
+
+    $('[data-add-color]', modal).addEventListener('click', () => {
+      const initialSizes = sizes.map(size => Object.assign({}, size, {
+        stock: colorEntries.length ? 0 : Number(size.stock) || 0,
+        sold: 0
+      }));
+      colorEntries.push({ name: '', images: [], sizes: initialSizes });
+      paintColors();
+      const inputs = $$('[data-color-name]', colorRowsHost);
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+
+    colorRowsHost.addEventListener('input', event => {
+      if (!event.target.matches('[data-color-name]')) return;
+      const row = event.target.closest('[data-color-row]');
+      if (!row) return;
+      const entry = colorEntries[Number(row.dataset.colorRow)];
+      entry.name = event.target.value;
+      const title = $('[data-variant-title]', row);
+      if (title) title.textContent = 'Sizes & stock · ' + (entry.name || 'Colour ' + (Number(row.dataset.colorRow) + 1));
+    });
+
+    colorRowsHost.addEventListener('click', event => {
+      const row = event.target.closest('[data-color-row]');
+      if (!row) return;
+      const rowIndex = Number(row.dataset.colorRow);
+      const entry = colorEntries[rowIndex];
+      if (!entry) return;
+
+      const addSize = event.target.closest('[data-add-size]');
+      if (addSize) {
+        const price = Number($('[data-field="price"]', modal).value) || 0;
+        const tableRows = $('[data-size-rows]', row);
+        tableRows.insertAdjacentHTML('beforeend', sizeRowHtml({ label: '', stock: 0, cost: Math.round(price * 0.45), price, sold: 0 }, $$('[data-size-row]', row).length));
+        updateSizeTotals(modal);
+        return;
+      }
+      const removeSize = event.target.closest('[data-remove-size]');
+      if (removeSize) {
+        removeSize.closest('[data-size-row]').remove();
+        updateSizeTotals(modal);
+        return;
+      }
+
+      if (event.target.closest('[data-remove-color]')) {
+        colorEntries.splice(rowIndex, 1);
+        paintColors();
+        return;
+      }
+      if (event.target.closest('[data-remove-color-image]')) {
+        entry.images.splice(Number(event.target.closest('[data-remove-color-image]').dataset.removeColorImage), 1);
+        paintColors();
+        return;
+      }
+      if (event.target.closest('[data-add-color-image]')) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = async () => {
+          for (const file of Array.from(input.files)) {
+            if (file && file.type.startsWith('image/')) entry.images.push(await readImage(file));
+          }
+          paintColors();
+        };
+        input.click();
+      }
+    });
+
+    colorRowsHost.addEventListener('change', event => {
+      const presetSelect = event.target.closest('[data-size-preset]');
+      if (!presetSelect) return;
+      const preset = SIZE_PRESETS[presetSelect.value];
+      presetSelect.value = '';
+      if (!preset) return;
+      const table = presetSelect.closest('.size-table');
+      const sizeHost = $('[data-size-rows]', table);
+      const basePrice = Number($('[data-field="price"]', modal).value) || 0;
+      const baseCost = Math.round(basePrice * 0.45);
+      const existing = readSizes(table).map(size => size.label);
+      preset.filter(label => !existing.includes(label)).forEach((label, offset) => {
+        sizeHost.insertAdjacentHTML('beforeend', sizeRowHtml({ label, stock: 0, cost: baseCost, price: basePrice + offset * 200, sold: 0 }, $$('[data-size-row]', table).length));
+      });
+      updateSizeTotals(modal);
+    });
     modal.addEventListener('input', event => {
       if (event.target.closest('[data-size-row]')) updateSizeTotals(modal);
     });
@@ -458,12 +552,55 @@
     $('#product-editor-form', modal).addEventListener('submit', async event => {
       event.preventDefault();
       if (!Store.api.productsOnline) { toast('The shared product server is unavailable. Nothing was saved.'); return; }
-      const sizes = readSizes(modal);
-      if (!sizes.length) { toast('Add at least one size'); return; }
-      const image = mainPicker.value;
-      if (!image) { toast('Please upload a product image'); return; }
+      colorEntries.forEach((entry, rowIndex) => {
+        const table = $('[data-variant-size-rows="' + rowIndex + '"]', colorRowsHost);
+        if (table) entry.sizes = readSizes(table);
+      });
+      if (colorEntries.some(entry => entry.name.trim() && !entry.sizes.length)) { toast('Add at least one size for every colour'); return; }
       const name = $('[data-field="name"]', modal).value.trim();
       if (!name) { toast('Please enter a product name'); return; }
+
+      // Collect the colour rows, dropping blanks and merging duplicates.
+      const colorImages = {};
+      const colorVariants = {};
+      const colorOrder = [];
+      colorEntries.forEach(entry => {
+        const colorName = String(entry.name || '').trim();
+        if (!colorName) return;
+        if (!(colorName in colorImages)) colorOrder.push(colorName);
+        const kept = (entry.images || []).filter(Boolean);
+        const previous = Array.isArray(colorImages[colorName]) ? colorImages[colorName] : [];
+        colorImages[colorName] = kept.length ? kept : previous;
+        if (!(colorName in colorVariants)) colorVariants[colorName] = entry.sizes;
+      });
+      if (!colorOrder.length) { toast('Please add at least one colour with a picture'); return; }
+      const colors = colorOrder;
+
+      /* Product photos are derived from the colour pictures: the very first
+         picture of the first colour is the main image, and every colour picture
+         fills the product gallery. */
+      const allPictures = [];
+      colorOrder.forEach(colorName => {
+        (colorImages[colorName] || []).forEach(source => {
+          if (source && allPictures.indexOf(source) === -1) allPictures.push(source);
+        });
+      });
+      const image = allPictures[0] || (product ? product.image : '');
+      if (!image) { toast('Please upload at least one colour picture'); return; }
+
+      const sizeLabels = Array.from(new Set(Object.keys(colorVariants).reduce((labels, colorName) => labels.concat(colorVariants[colorName].map(size => size.label)), [])));
+      const legacySizes = sizeLabels.map(label => {
+        const variants = colorOrder.map(colorName => colorVariants[colorName].find(size => size.label === label)).filter(Boolean);
+        return {
+          label,
+          stock: variants.reduce((sum, size) => sum + size.stock, 0),
+          cost: variants[0] ? variants[0].cost : 0,
+          price: variants[0] ? variants[0].price : Number($('[data-field="price"]', modal).value) || 0,
+          compareAtPrice: variants[0] ? variants[0].compareAtPrice : 0,
+          sold: variants.reduce((sum, size) => sum + size.sold, 0)
+        };
+      });
+
       const payload = {
         id: index,
         name,
@@ -472,12 +609,13 @@
         price: Number($('[data-field="price"]', modal).value) || 0,
         cost: Number($('[data-field="cost"]', modal).value) || 0,
         tag: $('[data-field="tag"]', modal).value.trim(),
-        colors: $('[data-field="colors"]', modal).value.split(',').map(item => item.trim()).filter(Boolean),
+        colors,
+        colorVariants,
         image,
-        gallery: [image, ...gallery.filter(source => source !== image)],
-        colorImages: index >= 0 ? Store.state.products[index].colorImages : {},
+        gallery: allPictures,
+        colorImages,
         colorMasks: index >= 0 ? Store.state.products[index].colorMasks : {},
-        sizes
+        sizes: legacySizes
       };
       const submit = $('button[type="submit"]', modal);
       if (submit) submit.disabled = true;
@@ -672,14 +810,47 @@ function filterOrders(term) {
 
   function renderCustomers(root) {
     if (!root) return;
-    root.innerHTML = Store.state.users.map((user, index) => `
-      <div class="customer-line page-customer-row">
-        <div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></div>
-        <span>${user.orders}</span>
-        <span>${money(user.spent)}</span>
-        <b class="status ${user.status === 'Active' ? 'paid' : 'pending'}">${escapeHtml(user.status)}</b>
-        <button data-user-status="${index}">${user.status === 'Active' ? 'Suspend' : 'Restore'}</button>
-      </div>`).join('') || '<p class="muted">No customers yet.</p>';
+    root.innerHTML = '<p class="muted">Loading customer activity…</p>';
+    fetch('/api/admin/customers', { credentials: 'same-origin' })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not load customer activity.');
+        return data;
+      })
+      .then(report => {
+        const metrics = report.metrics || {};
+        const metricsHost = $('#customer-activity-metrics');
+        const count = $('#customers-page-count');
+        if (metricsHost) {
+          metricsHost.innerHTML = [
+            [metrics.registered, 'registered accounts'],
+            [metrics.guests, 'checkout guests'],
+            [metrics.signedIn, 'users signed in'],
+            [metrics.signIns, 'total sign-ins'],
+            [metrics.wishlistEntries, 'wishlist saves']
+          ].map(([value, label]) => `<div><strong>${Number(value) || 0}</strong><span>${label}</span></div>`).join('');
+        }
+        if (count) count.textContent = `${report.customers.length} people · ${metrics.registered || 0} accounts · ${metrics.guests || 0} guests`;
+        root.innerHTML = (report.customers || []).map(customer => {
+          const saved = (customer.wishlist || []).map(product =>
+            `<a href="product.html?product=${Number(product.productIndex)}" target="_blank" rel="noopener">${escapeHtml(product.name)}</a>`).join('');
+          const lastSignIn = customer.lastSignInAt
+            ? new Date(customer.lastSignInAt).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' })
+            : 'Never';
+          return `<div class="account-customer-row">
+            <div><strong>${escapeHtml(customer.name)}</strong><small>${escapeHtml(customer.email)}</small></div>
+            <b class="status ${customer.registered ? 'paid' : 'pending'}">${customer.registered ? 'Registered' : 'Guest'}</b>
+            <span>${Number(customer.orders) || 0}</span>
+            <span>${money(customer.spent)}</span>
+            <span>${Number(customer.signInCount) || 0}</span>
+            <span>${escapeHtml(lastSignIn)}</span>
+            <div class="admin-wishlist-list">${saved || '<span class="muted">No saved products</span>'}</div>
+          </div>`;
+        }).join('') || '<p class="muted">No customers yet.</p>';
+      })
+      .catch(error => {
+        root.innerHTML = `<p class="muted">${escapeHtml(error.message || 'Could not load customer activity.')}</p>`;
+      });
 
     $$('[data-user-status]', root).forEach(button => button.addEventListener('click', () => {
       const user = Store.state.users[Number(button.dataset.userStatus)];
@@ -890,7 +1061,7 @@ function filterOrders(term) {
     if (lowList) {
       const flagged = [];
       Store.state.products.forEach(product => {
-        (product.sizes || []).forEach(size => {
+        Store.inventoryRows(product).forEach(size => {
           if (size.stock <= 10) flagged.push({ product, size });
         });
       });
@@ -898,7 +1069,7 @@ function filterOrders(term) {
       lowList.innerHTML = flagged.slice(0, 8).map(entry => `
         <div class="low-stock-line">
           <img src="${escapeHtml(entry.product.image)}" alt="">
-          <div><strong>${escapeHtml(entry.product.name)}</strong><small>Size ${escapeHtml(entry.size.label)} · ${entry.size.stock} left · ${money(entry.size.price || entry.product.price)}</small></div>
+          <div><strong>${escapeHtml(entry.product.name)}</strong><small>${entry.size.color ? escapeHtml(entry.size.color) + ' · ' : ''}Size ${escapeHtml(entry.size.label)} · ${entry.size.stock} left · ${money(entry.size.price || entry.product.price)}</small></div>
           <b class="status ${entry.size.stock <= 0 ? 'low-stock' : 'pending'}">${entry.size.stock <= 0 ? 'Unavailable' : 'Low'}</b>
         </div>`).join('') || '<p class="muted">Every size is well stocked.</p>';
     }
@@ -937,7 +1108,7 @@ function filterOrders(term) {
 
     const rows = Store.state.products.filter(product => {
       if (search && !product.name.toLowerCase().includes(search)) return false;
-      if (filter === 'out') return (product.sizes || []).some(size => size.stock <= 0);
+      if (filter === 'out') return Store.inventoryRows(product).some(size => size.stock <= 0);
       if (filter === 'low') { const stock = Store.totalStock(product); return stock > 0 && stock <= 10; }
       if (filter === 'sold') return Store.totalSold(product) > 0;
       if (filter !== 'all') return product.category === filter;
@@ -949,8 +1120,9 @@ function filterOrders(term) {
       const stock = Store.totalStock(product);
       const status = Store.productStatus(product);
       const sold = Store.totalSold(product);
-      const value = (product.sizes || []).reduce((sum, size) => sum + size.stock * (size.price || product.price), 0);
-      const cost = (product.sizes || []).reduce((sum, size) => sum + size.stock * size.cost, 0);
+      const inventory = Store.inventoryRows(product);
+      const value = inventory.reduce((sum, size) => sum + size.stock * (size.price || product.price), 0);
+      const cost = inventory.reduce((sum, size) => sum + size.stock * size.cost, 0);
       return `
       <div class="product-row" data-product-row="${index}">
         <div class="product-row-head">
@@ -958,7 +1130,7 @@ function filterOrders(term) {
             <img src="${escapeHtml(product.image)}" alt="">
             <span>
               <strong>${escapeHtml(product.name)}</strong>
-              <small>${escapeHtml(Store.categoryName(product.category))} · ${product.sizes.length} sizes · ${escapeHtml(product.tag || 'No badge')}</small>
+              <small>${escapeHtml(Store.categoryName(product.category))} · ${new Set(inventory.map(size => size.label)).size} sizes · ${escapeHtml(product.tag || 'No badge')}</small>
             </span>
           </div>
           <b class="status ${status.key}">${status.label}</b>
@@ -968,9 +1140,9 @@ function filterOrders(term) {
           </div>
         </div>
         <div class="size-chips">
-          ${(product.sizes || []).map(size => `
+          ${inventory.map(size => `
             <button class="size-chip${size.stock <= 0 ? ' is-out' : ''}" data-edit-product="${index}" title="Click to edit">
-              <b>${escapeHtml(size.label)}</b>
+              <b>${escapeHtml(size.color ? size.color + ' · ' + size.label : size.label)}</b>
               <span>${size.stock} in stock</span>
               <em>${money(size.price || product.price)}</em>
               <small>cost ${money(size.cost)}</small>
@@ -1028,8 +1200,6 @@ function filterOrders(term) {
 
   function pageCustomers() {
     renderCustomers($('#customers-page-list'));
-    const counter = $('#customers-page-count');
-    if (counter) counter.textContent = Store.state.users.length + ' registered customers';
   }
 
   const PAGES = {

@@ -315,6 +315,7 @@
       stock: Math.max(0, num(entry && entry.stock)),
       cost: Math.max(0, num(entry && entry.cost, Math.round(num(product.price) * 0.45))),
       price: rawPrice === '' || rawPrice == null || !Number.isFinite(Number(rawPrice)) ? num(product.price) : Number(rawPrice),
+      compareAtPrice: Math.max(0, num(entry && entry.compareAtPrice)),
       sold: Math.max(0, num(entry && entry.sold))
     };
   }
@@ -354,6 +355,16 @@
     base.tag = base.tag || '';
     base.sold = Math.max(0, num(base.sold));
     base.colors = (Array.isArray(base.colors) && base.colors.length) ? base.colors : DEFAULT_COLORS.slice();
+    base.colorVariants = base.colorVariants && typeof base.colorVariants === 'object' && !Array.isArray(base.colorVariants) ? base.colorVariants : {};
+    Object.keys(base.colorVariants).forEach(function (color) {
+      if (!Array.isArray(base.colorVariants[color])) {
+        delete base.colorVariants[color];
+        return;
+      }
+      base.colorVariants[color] = base.colorVariants[color].map(function (entry, position) {
+        return normalizeSize(entry, position, base);
+      });
+    });
     base.gallery = (Array.isArray(base.gallery) && base.gallery.length) ? base.gallery : [base.image];
     /* Optional exact colour previews: images are variant photos; masks are
        transparent garment silhouettes aligned with the main product image. */
@@ -434,41 +445,79 @@
 
   /* ---------------------------------------------------------- derivations */
 
-  function sizeOf(product, label) {
+  function sizesFor(product, color) {
+    var variants = product && product.colorVariants;
+    var hasVariants = variants && Object.keys(variants).some(function (name) { return Array.isArray(variants[name]); });
+    if (hasVariants) return color && Array.isArray(variants[color]) ? variants[color] : [];
+    return (product && product.sizes) || [];
+  }
+
+  function inventoryRows(product) {
+    var variants = product && product.colorVariants;
+    var colors = variants && Object.keys(variants).filter(function (color) { return Array.isArray(variants[color]); });
+    if (colors && colors.length) {
+      return colors.reduce(function (rows, color) {
+        return rows.concat(variants[color].map(function (size) { return Object.assign({ color: color }, size); }));
+      }, []);
+    }
+    return ((product && product.sizes) || []).map(function (size) { return Object.assign({ color: '' }, size); });
+  }
+
+  function sizeOf(product, label, color) {
     var found = null;
-    (product.sizes || []).forEach(function (size) { if (size.label === label) found = size; });
+    sizesFor(product, color).forEach(function (size) { if (size.label === label) found = size; });
     return found;
   }
 
-  function stockFor(product, label) {
-    var size = sizeOf(product, label);
+  function stockFor(product, label, color) {
+    var size = sizeOf(product, label, color);
     return size ? size.stock : 0;
   }
 
-  function priceFor(product, label) {
-    var size = sizeOf(product, label);
+  function priceFor(product, label, color) {
+    var size = sizeOf(product, label, color);
     return size && size.price > 0 ? size.price : num(product.price);
   }
 
-  function costFor(product, label) {
-    var size = sizeOf(product, label);
+  function costFor(product, label, color) {
+    var size = sizeOf(product, label, color);
     return size ? size.cost : num(product.cost);
   }
 
   function totalStock(product) {
-    return (product.sizes || []).reduce(function (sum, size) { return sum + (Number(size.stock) || 0); }, 0);
+    return inventoryRows(product).reduce(function (sum, size) { return sum + (Number(size.stock) || 0); }, 0);
   }
 
   function totalSold(product) {
-    return (product.sizes || []).reduce(function (sum, size) { return sum + (Number(size.sold) || 0); }, 0) || num(product.sold);
+    return inventoryRows(product).reduce(function (sum, size) { return sum + (Number(size.sold) || 0); }, 0) || num(product.sold);
   }
 
   function priceRange(product) {
-    var values = (product.sizes || []).map(function (size) { return size.price > 0 ? size.price : num(product.price); });
+    var values = inventoryRows(product).map(function (size) { return size.price > 0 ? size.price : num(product.price); });
     if (!values.length) values = [num(product.price)];
     var min = Math.min.apply(null, values);
     var max = Math.max.apply(null, values);
     return min === max ? money(min) : money(min) + ' – ' + money(max);
+  }
+
+  function compareAtPriceFor(product, label, color) {
+    var size = sizeOf(product, label, color);
+    var price = size && size.price > 0 ? size.price : num(product.price);
+    return size && size.compareAtPrice > price ? size.compareAtPrice : 0;
+  }
+
+  function priceRangeMarkup(product) {
+    var rows = inventoryRows(product);
+    var discounted = rows.filter(function (size) {
+      var price = size.price > 0 ? size.price : num(product.price);
+      return Number(size.compareAtPrice) > price;
+    });
+    if (!discounted.length) return '<span class="price-current">' + escapeHtml(priceRange(product)) + '</span>';
+    var oldValues = discounted.map(function (size) { return Number(size.compareAtPrice); });
+    var oldMin = Math.min.apply(null, oldValues);
+    var oldMax = Math.max.apply(null, oldValues);
+    var was = oldMin === oldMax ? money(oldMin) : money(oldMin) + ' – ' + money(oldMax);
+    return '<del class="price-was">' + escapeHtml(was) + '</del><span class="price-current is-sale">' + escapeHtml(priceRange(product)) + '</span>';
   }
 
   function categoryName(slug) {
@@ -499,6 +548,14 @@
   function upsertProduct(payload) {
     var index = Number(payload.id);
     var sizes = (payload.sizes || []).filter(function (size) { return size.label; });
+    var colorVariants = {};
+    Object.keys(payload.colorVariants || {}).forEach(function (color) {
+      if (Array.isArray(payload.colorVariants[color])) {
+        colorVariants[color] = payload.colorVariants[color].map(function (size, position) {
+          return normalizeSize(size, position, payload);
+        });
+      }
+    });
     var record = {
       name: payload.name,
       description: payload.description || '',
@@ -509,6 +566,7 @@
       colorMasks: payload.colorMasks || (state.products[index] && state.products[index].colorMasks) || {},
       tag: payload.tag || '',
       colors: payload.colors && payload.colors.length ? payload.colors : DEFAULT_COLORS.slice(),
+      colorVariants: colorVariants,
       price: num(payload.price),
       cost: num(payload.cost),
       sold: sizes.reduce(function (sum, size) { return sum + (Number(size.sold) || 0); }, 0),
@@ -518,6 +576,7 @@
           stock: Math.max(0, num(size.stock)),
           cost: Math.max(0, num(size.cost)),
           price: Math.max(0, num(size.price, num(payload.price))),
+          compareAtPrice: Math.max(0, num(size.compareAtPrice)),
           sold: Math.max(0, num(size.sold))
         };
       }),
@@ -819,12 +878,12 @@
     var unitsInStock = products.reduce(function (sum, product) { return sum + totalStock(product); }, 0);
     var unitsSold = products.reduce(function (sum, product) { return sum + totalSold(product); }, 0);
     var stockValue = products.reduce(function (sum, product) {
-      return sum + (product.sizes || []).reduce(function (inner, size) {
+      return sum + inventoryRows(product).reduce(function (inner, size) {
         return inner + (Number(size.stock) || 0) * (size.price > 0 ? size.price : num(product.price));
       }, 0);
     }, 0);
     var costValue = products.reduce(function (sum, product) {
-      return sum + (product.sizes || []).reduce(function (inner, size) {
+      return sum + inventoryRows(product).reduce(function (inner, size) {
         return inner + (Number(size.stock) || 0) * num(size.cost);
       }, 0);
     }, 0);
@@ -833,8 +892,8 @@
     }, 0);
     var outOfStockSizes = [];
     products.forEach(function (product) {
-      (product.sizes || []).forEach(function (size) {
-        if (size.stock <= 0) outOfStockSizes.push({ product: product.name, size: size.label });
+      inventoryRows(product).forEach(function (size) {
+        if (size.stock <= 0) outOfStockSizes.push({ product: product.name, color: size.color, size: size.label });
       });
     });
     return {
@@ -1075,6 +1134,10 @@
     sizeOf: sizeOf,
     stockFor: stockFor,
     priceFor: priceFor,
+    compareAtPriceFor: compareAtPriceFor,
+    priceRangeMarkup: priceRangeMarkup,
+    sizesFor: sizesFor,
+    inventoryRows: inventoryRows,
     costFor: costFor,
     totalStock: totalStock,
     totalSold: totalSold,

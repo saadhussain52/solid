@@ -14,6 +14,7 @@
   const grid = document.querySelector('#product-grid');
   const collectionGrid = document.querySelector('#collection-grid');
   let cart = [];
+  let wishlist = new Set();
   try { cart = JSON.parse(localStorage.getItem('solids-cart') || '[]') || []; } catch (error) { cart = []; }
 
   const saveCart = () => {
@@ -21,6 +22,7 @@
   };
 
   const productLabel = product => Store.categoryName(product.category);
+  const wishlistButton = index => `<button type="button" class="product-wishlist${wishlist.has(index) ? ' is-saved' : ''}" data-wishlist-product="${index}" aria-label="${wishlist.has(index) ? 'Remove from' : 'Add to'} wishlist" aria-pressed="${wishlist.has(index)}" title="${wishlist.has(index) ? 'Remove from' : 'Add to'} wishlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.6c0 5.4-8.8 11-8.8 11s-8.8-5.6-8.8-11A4.6 4.6 0 0 1 12 6a4.6 4.6 0 0 1 8.8 2.6Z"/></svg></button>`;
   window.addEventListener('store:products-loaded', () => renderProducts(currentFilter));
 
   /* ------------------------------------------------------- site content */
@@ -209,6 +211,7 @@
             <a class="product-link" href="product.html?product=${index}" aria-label="View ${escapeHtml(product.name)}">
               <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">
             </a>
+            ${wishlistButton(index)}
             ${product.tag ? `<span class="product-badge">${escapeHtml(product.tag)}</span>` : ''}
             ${status.key === 'sold-out' ? '<span class="sold-out-flag">Sold out</span>' : ''}
             ${low ? `<span class="low-stock-flag">Only ${units} left</span>` : ''}
@@ -221,7 +224,7 @@
               <h3><a href="product.html?product=${index}">${escapeHtml(product.name)}</a></h3>
               <p>Solids / ${escapeHtml(productLabel(product))}${low ? ` · ${units} left` : ''}</p>
             </div>
-            <span class="product-price">${Store.priceRange(product)}</span>
+            <span class="product-price">${Store.priceRangeMarkup(product)}</span>
           </div>
         </article>`;
       }).join('');
@@ -248,7 +251,7 @@
     const product = Store.state.products[item.productIndex];
     if (!product) return;
     if (item.size) {
-      if (Store.stockFor(product, item.size) <= 0) { notify(`${product.name} — ${item.size} is sold out`); return; }
+      if (Store.stockFor(product, item.size, item.color) <= 0) { notify(`${product.name} — ${item.color || ''} ${item.size} is sold out`); return; }
     } else if (Store.totalStock(product) <= 0) {
       notify(`${product.name} is sold out`);
       return;
@@ -256,8 +259,8 @@
     const key = cartKey(item);
     const existing = cart.filter(line => cartKey(line) === key)[0];
     const inBag = existing ? existing.quantity : 0;
-    const available = item.size ? Store.stockFor(product, item.size) : Store.totalStock(product);
-    if (inBag >= available) { notify(`Only ${available} left in ${item.size || product.name}`); return; }
+    const available = item.size ? Store.stockFor(product, item.size, item.color) : Store.totalStock(product);
+    if (inBag >= available) { notify(`Only ${available} left in ${item.color ? item.color + ' ' : ''}${item.size || product.name}`); return; }
     if (existing) existing.quantity += 1;
     else cart.push({ productIndex: item.productIndex, size: item.size, color: item.color || '', quantity: 1 });
     saveCart();
@@ -269,8 +272,12 @@
     return cart.map(line => {
       const product = Store.state.products[line.productIndex];
       if (!product) return null;
-      const price = line.size ? Store.priceFor(product, line.size) : numOr(product.price);
-      return { line, product, price, total: price * line.quantity };
+      const price = line.size ? Store.priceFor(product, line.size, line.color) : numOr(product.price);
+      const colorImage = product.colorImages && product.colorImages[line.color];
+      const image = Array.isArray(colorImage)
+        ? (colorImage.find(Boolean) || product.image)
+        : (typeof colorImage === 'string' && colorImage ? colorImage : product.image);
+      return { line, product, price, total: price * line.quantity, image };
     }).filter(Boolean);
   }
 
@@ -301,7 +308,7 @@
     if (checkout) { checkout.disabled = false; checkout.classList.remove('is-disabled'); }
     items.innerHTML = lines.map((entry, index) => `
       <div class="cart-item">
-        <img src="${escapeHtml(entry.product.image)}" alt="${escapeHtml(entry.product.name)}">
+        <img src="${escapeHtml(entry.image)}" alt="${escapeHtml(entry.product.name)}${entry.line.color ? ' in ' + escapeHtml(entry.line.color) : ''}">
         <div>
           <h4>${escapeHtml(entry.product.name)}</h4>
           <p>${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : `<a href="product.html?product=${entry.line.productIndex}">Choose colour</a> · `}${entry.line.size ? `Size ${escapeHtml(entry.line.size)} · ` : ''}${money(entry.price)} × ${entry.line.quantity}</p>
@@ -330,7 +337,7 @@
       const index = Number(button.dataset.cartInc);
       const line = cart[index];
       const product = Store.state.products[line.productIndex];
-      const available = line.size ? Store.stockFor(product, line.size) : Store.totalStock(product);
+      const available = line.size ? Store.stockFor(product, line.size, line.color) : Store.totalStock(product);
       if (line.quantity >= available) { notify(`Only ${available} available`); return; }
       line.quantity += 1;
       saveCart();
@@ -547,7 +554,7 @@
 
     const rows = lines.map(entry => `
       <div class="co-line">
-        <img src="${escapeAttr(entry.product.image || '')}" alt="">
+        <img src="${escapeAttr(entry.image || '')}" alt="${escapeAttr(entry.product.name + (entry.line.color ? ' in ' + entry.line.color : ''))}">
         <div>
           <strong>${escapeHtml(entry.product.name)}</strong>
           <span>${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : 'Colour not selected · '}${escapeHtml(entry.line.size || 'Size not selected')} · Qty ${entry.line.quantity}</span>
@@ -944,7 +951,7 @@
     const matched = Store.state.products.filter(product => product.name.toLowerCase().includes(query));
     results.innerHTML = matched.map(product => {
       const index = Store.state.products.indexOf(product);
-      return `<a class="search-result" href="product.html?product=${index}">${escapeHtml(product.name)}<span>${Store.priceRange(product)}</span></a>`;
+      return `<a class="search-result" href="product.html?product=${index}">${escapeHtml(product.name)}<span>${Store.priceRangeMarkup(product)}</span></a>`;
     }).join('') || '<p class="muted">No matches found.</p>';
   });
 
@@ -955,23 +962,8 @@
 
   /* ------------------------------------------------------- product detail page */
 
-  const COLOR_PALETTE = [
-    ['Snow', '#fffafa'], ['Ivory', '#f4efe4'], ['Bone', '#e8e2d6'], ['Oat', '#ded2bf'], ['Sand', '#d6c3a5'],
-    ['Beige', '#d8c3a5'], ['Taupe', '#aa9985'], ['Mushroom', '#a39283'], ['Mocha', '#806654'], ['Cocoa', '#65483c'],
-    ['Chocolate', '#4a3026'], ['Espresso', '#33231d'], ['Black', '#1b1a19'], ['Charcoal', '#3b3a38'], ['Slate', '#62666a'],
-    ['Ash Grey', '#858585'], ['Grey', '#a4a29e'], ['Silver', '#c3c1bc'], ['Cloud', '#d7d8d6'], ['White', '#f7f6f3'],
-    ['Stone', '#b6ad9e'], ['Khaki', '#b3a685'], ['Camel', '#b58d62'], ['Tan', '#c9a882'], ['Caramel', '#ad754b'],
-    ['Rust', '#a4552f'], ['Terracotta', '#c66b4e'], ['Burnt Orange', '#b95424'], ['Orange', '#e17b32'], ['Apricot', '#edaa78'],
-    ['Peach', '#f0b6a1'], ['Coral', '#e77c70'], ['Red', '#b4403a'], ['Brick', '#913c35'], ['Cherry', '#9e2038'],
-    ['Burgundy', '#5d2733'], ['Maroon', '#71333d'], ['Wine', '#6e3045'], ['Berry', '#8e3e65'], ['Fuchsia', '#c43b83'],
-    ['Hot Pink', '#e84a91'], ['Pink', '#d7a8ad'], ['Blush', '#e8c1bd'], ['Rose', '#c98b93'], ['Dusty Rose', '#bd8f91'],
-    ['Mauve', '#a77d8e'], ['Lilac', '#b3a3c2'], ['Lavender', '#a995c8'], ['Violet', '#76538c'], ['Purple', '#5f4a6b'],
-    ['Plum', '#59364f'], ['Indigo', '#43436b'], ['Navy', '#26303f'], ['Midnight Blue', '#17243a'], ['Royal Blue', '#3559a5'],
-    ['Blue', '#4a6b8a'], ['Sky Blue', '#80b6d5'], ['Powder Blue', '#b4d0db'], ['Teal', '#287f83'], ['Turquoise', '#45b7ad'],
-    ['Aqua', '#8acbc4'], ['Mint', '#a4d2ba'], ['Sage', '#a8b39a'], ['Olive', '#5f6b4a'], ['Moss', '#65734c'],
-    ['Forest Green', '#315b45'], ['Green', '#4f6b52'], ['Emerald', '#2e8065'], ['Lime', '#a9b94a'], ['Chartreuse', '#b4b846'],
-    ['Mustard', '#c39a3c'], ['Yellow', '#e3c64f'], ['Lemon', '#f0df76'], ['Gold', '#c2a25a'], ['Copper', '#a96a42']
-  ];
+  /* The storefront no longer ships a fixed palette. Every colour shown to a
+     shopper comes from the admin panel, together with its own picture(s). */
 
   const detailImage = document.querySelector('#detail-image');
   if (detailImage) {
@@ -980,26 +972,54 @@
     if (product) {
       const quantityEl = document.querySelector('#quantity-value');
       const gallery = document.querySelector('#detail-gallery');
+      const detailPrice = document.querySelector('#detail-price');
+      let comparePrice = document.querySelector('#detail-compare-price');
+      if (!comparePrice && detailPrice) {
+        comparePrice = document.createElement('del');
+        comparePrice.id = 'detail-compare-price';
+        comparePrice.hidden = true;
+        detailPrice.before(comparePrice);
+      }
       let galleryIndex = 0;
 
-      const sizes = product.sizes || [];
+      let sizes = Store.sizesFor(product, (product.colors || [])[0]);
       const sizeRow = document.querySelector('.size-options');
-      if (sizeRow) {
+      const renderSizeOptions = color => {
+        sizes = Store.sizesFor(product, color);
+        const previouslySelected = sizeRow?.querySelector('button.selected')?.dataset.size;
+        if (!sizeRow) return;
         sizeRow.innerHTML = sizes.map(size => {
           const out = size.stock <= 0;
           return `<button data-size="${escapeHtml(size.label)}" class="${out ? 'sold-out' : ''}"${out ? ' disabled' : ''} title="${out ? 'Out of stock' : size.stock + ' in stock'}">${escapeHtml(size.label)}</button>`;
         }).join('');
-      }
+        const preferred = sizes.find(size => size.label === previouslySelected && size.stock > 0);
+        const firstAvailable = preferred || sizes.find(size => size.stock > 0) || sizes[0];
+        if (firstAvailable) sizeRow.querySelector(`[data-size="${CSS.escape(firstAvailable.label)}"]`)?.classList.add('selected');
+      };
+      renderSizeOptions((product.colors || [])[0] || Object.keys(product.colorVariants || {})[0] || '');
 
-      const firstAvailable = sizes.filter(size => size.stock > 0)[0];
       const selectedSize = () => {
         const active = document.querySelector('.size-options button.selected');
-        return active ? active.dataset.size : (firstAvailable ? firstAvailable.label : (sizes[0] ? sizes[0].label : ''));
+        const firstAvailable = sizes.find(size => size.stock > 0) || sizes[0];
+        return active ? active.dataset.size : (firstAvailable ? firstAvailable.label : '');
       };
 
-      /* The storefront owns its fixed palette; admin product colour text does
-         not limit which colours a customer can select. */
-      const colors = COLOR_PALETTE.map(([name]) => name);
+      /* Colour pictures uploaded from the admin panel, keyed by colour name.
+         A colour may hold a single picture or a list of pictures. */
+      const colorImages = product.colorImages && typeof product.colorImages === 'object' ? product.colorImages : {};
+      const picturesForColor = colorName => {
+        const value = colorImages[colorName];
+        if (Array.isArray(value)) return value.filter(Boolean);
+        return typeof value === 'string' && value ? [value] : [];
+      };
+
+      /* Only the colours the admin saved on this product are shown. A colour is
+         listed when it has a name; its picture(s) come from the admin upload. */
+      const colorHexes = product.colorHexes && typeof product.colorHexes === 'object' ? product.colorHexes : {};
+      const savedColors = Array.isArray(product.colors) ? product.colors : [];
+      const colors = savedColors
+        .concat(Object.keys(colorImages))
+        .filter((name, position, list) => name && list.indexOf(name) === position);
       const colorRow = document.querySelector('#color-options');
       const colorLabel = document.querySelector('#selected-color');
       const colorField = colorRow?.closest('.color-row');
@@ -1020,18 +1040,23 @@
         colorField.querySelector('.color-preview-note')?.remove();
       }
       if (colorRow) {
-        colorRow.innerHTML = COLOR_PALETTE.map(([color, hex]) =>
-          `<button type="button" class="color-swatch" data-color="${escapeAttr(color)}" title="${escapeAttr(color)}" aria-label="${escapeAttr(color)}" style="--swatch:${hex}"></button>`).join('');
+        const hexFor = name => (typeof colorHexes[name] === 'string' && colorHexes[name]) || '#a4a29e';
+        colorRow.innerHTML = colors.map((color, position) => {
+          const hasPictures = picturesForColor(color).length > 0;
+          const picture = picturesForColor(color)[0];
+          const count = picturesForColor(color).length;
+          return `<button type="button" class="color-swatch${hasPictures ? ' has-image' : ''}${position === 0 ? ' selected' : ''}" data-color="${escapeAttr(color)}" title="${escapeAttr(color)}${hasPictures ? ' — ' + count + ' picture' + (count > 1 ? 's' : '') : ''}" aria-label="${escapeAttr(color)}" style="--swatch:${hexFor(color)}${picture ? `;--swatch-image:url('${escapeAttr(picture)}')` : ''}"></button>`;
+        }).join('');
       }
       const selectedColor = () => {
         const active = colorRow && colorRow.querySelector('.color-swatch.selected');
         if (active) return active.dataset.color;
-        return colors[0];
+        return colors[0] || '';
       };
       const paintColors = () => {
         const chosen = selectedColor();
         if (colorLabel) colorLabel.textContent = chosen || '—';
-        if (colorToggle) colorToggle.style.setProperty('--selected-swatch', COLOR_PALETTE.find(([name]) => name === chosen)?.[1] || '#a4a29e');
+        if (colorToggle) colorToggle.style.setProperty('--selected-swatch', (typeof colorHexes[chosen] === 'string' && colorHexes[chosen]) || '#a4a29e');
         colorRow?.querySelectorAll('.color-swatch').forEach(button => {
           button.classList.toggle('selected', button.dataset.color === chosen);
         });
@@ -1048,6 +1073,11 @@
           colorRow.querySelectorAll('.color-swatch').forEach(item => item.classList.remove('selected'));
           button.classList.add('selected');
           paintColors();
+          renderSizeOptions(button.dataset.color);
+          update();
+          /* Swap the product picture(s) to the chosen colour's own images. */
+          galleryIndex = 0;
+          paintImage();
           closeColorPicker();
         });
         colorToggle?.addEventListener('click', () => {
@@ -1067,10 +1097,18 @@
       const update = () => {
         const label = selectedSize();
         const quantity = Number(quantityEl.textContent) || 1;
-        const price = Store.priceFor(product, label);
-        const stock = Store.stockFor(product, label);
-        const priceEl = document.querySelector('#detail-price');
-        if (priceEl) priceEl.textContent = money(price);
+        const color = selectedColor();
+        const price = Store.priceFor(product, label, color);
+        const stock = Store.stockFor(product, label, color);
+        const compare = Store.compareAtPriceFor(product, label, color);
+        if (detailPrice) {
+          detailPrice.textContent = money(price);
+          detailPrice.classList.toggle('is-sale', compare > price);
+        }
+        if (comparePrice) {
+          comparePrice.textContent = compare > price ? money(compare) : '';
+          comparePrice.hidden = compare <= price;
+        }
         const subtotalEl = document.querySelector('#detail-subtotal');
         if (subtotalEl) subtotalEl.textContent = money(price * quantity);
         const sizeLabel = document.querySelector('#selected-size');
@@ -1083,9 +1121,17 @@
       };
 
       const paintImage = () => {
-        const gallerySources = product.gallery && product.gallery.length ? product.gallery : [product.image];
+        const active = colorRow && colorRow.querySelector('.color-swatch.selected');
+        const chosen = active ? active.dataset.color : '';
+        const colorPictures = picturesForColor(chosen);
+        /* When the chosen colour has its own pictures, those replace the product
+           photos; otherwise the product's default images stay on screen. */
+        const gallerySources = colorPictures.length
+          ? colorPictures
+          : (product.gallery && product.gallery.length ? product.gallery : [product.image]);
+        if (galleryIndex >= gallerySources.length) galleryIndex = 0;
         detailImage.src = gallerySources[galleryIndex] || product.image;
-        detailImage.alt = product.name;
+        detailImage.alt = chosen ? product.name + ' in ' + chosen : product.name;
         if (gallery) {
           gallery.innerHTML = gallerySources.map((source, position) =>
             `<button data-gallery="${position}" class="${position === galleryIndex ? 'active' : ''}"><img src="${escapeHtml(source)}" alt="${escapeHtml(product.name)} view ${position + 1}"></button>`).join('');
@@ -1098,7 +1144,19 @@
       paintImage();
 
       const nameEl = document.querySelector('#detail-name');
-      if (nameEl) nameEl.textContent = product.name;
+      if (nameEl) {
+        nameEl.textContent = product.name;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'product-wishlist detail-wishlist';
+        button.dataset.wishlistProduct = String(index);
+        button.setAttribute('aria-label', wishlist.has(index) ? 'Remove from wishlist' : 'Add to wishlist');
+        button.setAttribute('aria-pressed', String(wishlist.has(index)));
+        button.title = wishlist.has(index) ? 'Remove from wishlist' : 'Add to wishlist';
+        button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.6c0 5.4-8.8 11-8.8 11s-8.8-5.6-8.8-11A4.6 4.6 0 0 1 12 6a4.6 4.6 0 0 1 8.8 2.6Z"/></svg>';
+        if (wishlist.has(index)) button.classList.add('is-saved');
+        nameEl.insertAdjacentElement('afterend', button);
+      }
       const crumb = document.querySelector('#product-breadcrumb');
       if (crumb) crumb.textContent = product.name;
       const tagEl = document.querySelector('#detail-tag');
@@ -1122,7 +1180,7 @@
 
       document.querySelector('#plus')?.addEventListener('click', () => {
         const label = selectedSize();
-        const ceiling = Store.stockFor(product, label);
+        const ceiling = Store.stockFor(product, label, selectedColor());
         if (Number(quantityEl.textContent) >= ceiling) { notify('Only ' + ceiling + ' available in ' + label); return; }
         quantityEl.textContent = Number(quantityEl.textContent) + 1;
         update();
@@ -1134,15 +1192,16 @@
 
       document.querySelector('.detail-add')?.addEventListener('click', () => {
         const label = selectedSize();
-        if (Store.stockFor(product, label) <= 0) { notify(label + ' is out of stock'); return; }
+        if (Store.stockFor(product, label, selectedColor()) <= 0) { notify(selectedColor() + ' / ' + label + ' is out of stock'); return; }
         addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });
       });
       document.querySelector('.buy-now')?.addEventListener('click', () => {
         const label = selectedSize();
-        if (Store.stockFor(product, label) <= 0) { notify(label + ' is out of stock'); return; }
+        if (Store.stockFor(product, label, selectedColor()) <= 0) { notify(selectedColor() + ' / ' + label + ' is out of stock'); return; }
         addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });
         window.setTimeout(openCheckout, 350);
       });
+      update();
 
       const reviewsHost = document.querySelector('#detail-reviews');
       if (reviewsHost) {
@@ -1180,6 +1239,7 @@
                 <a class="product-link" href="product.html?product=${position}" aria-label="View ${escapeHtml(item.name)}">
                   <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}">
                 </a>
+                ${wishlistButton(position)}
                 ${item.tag ? `<span class="product-badge">${escapeHtml(item.tag)}</span>` : ''}
                 ${status.key === 'sold-out' ? '<span class="sold-out-flag">Sold out</span>' : ''}
                 ${low ? `<span class="low-stock-flag">Only ${units} left</span>` : ''}
@@ -1192,7 +1252,7 @@
                   <h3><a href="product.html?product=${position}">${escapeHtml(item.name)}</a></h3>
                   <p>Solids / ${escapeHtml(productLabel(item))}${low ? ` · ${units} left` : ''}</p>
                 </div>
-                <span class="product-price">${Store.priceRange(item)}</span>
+                <span class="product-price">${Store.priceRangeMarkup(item)}</span>
               </div>
             </article>`;
           }).join('');
@@ -1275,7 +1335,14 @@
     });
 
     const colorSelect = form.querySelector('#custom-color');
-    COLOR_PALETTE.forEach(([name]) => {
+    /* Offer the colours the studio actually saved on its products. */
+    const availableColors = [];
+    Store.state.products.forEach(product => {
+      (product.colors || []).forEach(name => {
+        if (name && availableColors.indexOf(name) === -1) availableColors.push(name);
+      });
+    });
+    availableColors.forEach(name => {
       const option = document.createElement('option');
       option.value = name;
       option.textContent = name;
@@ -1347,4 +1414,11 @@
 
   const collectionCount = document.querySelector('.catalog-collection-card p');
   if (collectionCount) collectionCount.textContent = Store.state.products.length + ' products';
+
+  if (!document.querySelector('script[data-customer-module]')) {
+    const customerModule = document.createElement('script');
+    customerModule.src = 'customer.js';
+    customerModule.dataset.customerModule = '';
+    document.body.appendChild(customerModule);
+  }
 })();

@@ -526,6 +526,21 @@ body{
 
 .color-swatch:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
+/* A colour that carries its own product picture gets a small corner dot so the
+   shopper knows clicking it will swap the photo. */
+.color-swatch.has-image::after{
+  content:"";
+  position:absolute;
+  right:-1px;
+  bottom:-1px;
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:var(--accent);
+  border:1.5px solid var(--paper);
+  pointer-events:none
+}
+
 /* --- custom order request ------------------------------------------------ */
 .custom-order-page{
   max-width:1080px;
