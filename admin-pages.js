@@ -401,9 +401,18 @@
       const known = product && Array.isArray(product.colors) ? product.colors : [];
       const names = known.concat(Object.keys(saved)).filter((name, position, list) => name && list.indexOf(name) === position);
       const savedVariants = product && product.colorVariants && typeof product.colorVariants === 'object' ? product.colorVariants : {};
+      const hasColorPictures = Object.keys(saved).some(name => {
+        const value = saved[name];
+        return (Array.isArray(value) && value.some(Boolean)) || (typeof value === 'string' && value);
+      });
+      const legacyPictures = !hasColorPictures && product
+        ? (Array.isArray(product.gallery) && product.gallery.length ? product.gallery : [product.image]).filter(Boolean)
+        : [];
       return names.map((name, colorIndex) => {
         const value = saved[name];
-        const images = Array.isArray(value) ? value.filter(Boolean) : (typeof value === 'string' && value ? [value] : []);
+        const colorPictures = Array.isArray(value) ? value.filter(Boolean) : (typeof value === 'string' && value ? [value] : []);
+        const isLegacyFallback = colorIndex === 0 && !hasColorPictures && legacyPictures.length > 0;
+        const images = colorPictures.length ? colorPictures : (isLegacyFallback ? legacyPictures : []);
         const source = Array.isArray(savedVariants[name]) ? savedVariants[name] : sizes;
         const divisor = Math.max(1, names.length);
         const variantSizes = source.map(size => {
@@ -414,7 +423,7 @@
             sold: Array.isArray(savedVariants[name]) ? sold : Math.floor(sold / divisor) + (colorIndex < sold % divisor ? 1 : 0)
           });
         });
-        return { name, images, sizes: variantSizes };
+        return { name, images, sizes: variantSizes, isLegacyFallback };
       });
     };
     colorEntries = readSavedColors();
@@ -437,7 +446,7 @@
               <span aria-hidden="true">+</span>Add pictures
             </button>
           </div>
-          <small class="file-help">${entry.images.length ? entry.images.length + ' picture' + (entry.images.length > 1 ? 's' : '') + ' added. The first one is this colour\'s main photo.' : 'No picture for this colour yet — click “Add pictures”.'}</small>
+          <small class="file-help">${entry.isLegacyFallback ? entry.images.length + ' existing product picture' + (entry.images.length > 1 ? 's shown' : ' shown') + ' under the first colour. Saving will associate them with this colour.' : entry.images.length ? entry.images.length + ' picture' + (entry.images.length > 1 ? 's' : '') + ' added. The first one is this colour\'s main photo.' : 'No picture for this colour yet — click “Add pictures”.'}</small>
           <div class="color-inventory">
             <strong data-variant-title>Sizes &amp; stock · ${escapeHtml(entry.name || 'Colour ' + (rowIndex + 1))}</strong>
             ${sizeRows(entry.sizes, rowIndex)}
