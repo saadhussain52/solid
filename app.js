@@ -1023,24 +1023,37 @@
       const colorRow = document.querySelector('#color-options');
       const colorLabel = document.querySelector('#selected-color');
       const colorField = colorRow?.closest('.color-row');
-      const colorToggle = document.createElement('button');
-      colorToggle.type = 'button';
-      colorToggle.className = 'color-picker-toggle';
-      colorToggle.id = 'color-picker-toggle';
-      colorToggle.setAttribute('aria-expanded', 'false');
-      colorToggle.setAttribute('aria-controls', 'color-options');
-      if (colorField && colorRow && colorLabel) {
-        const caption = document.createElement('span');
-        caption.textContent = 'Choose colour: ';
-        const oldLabel = colorLabel.parentElement;
-        colorToggle.append(caption, colorLabel);
-        oldLabel.remove();
-        colorField.insertBefore(colorToggle, colorRow);
-        colorRow.hidden = true;
+      colorRow?.setAttribute('aria-label', 'Choose a colour');
+      const standardColorHexes = {
+        red: '#d72638',
+        orange: '#f28c28',
+        blue: '#2563eb',
+        green: '#2f855a',
+        yellow: '#facc15',
+        pink: '#ec4899',
+        purple: '#7e22ce',
+        brown: '#8b5e3c',
+        black: '#171717',
+        white: '#ffffff',
+        bone: '#e8dfcd',
+        ivory: '#f4efdf',
+        cream: '#f3ead5',
+        beige: '#d8c5a5',
+        oatmeal: '#cbb99b',
+        olive: '#74764a',
+        navy: '#1e3a5f',
+        grey: '#888888',
+        gray: '#888888'
+      };
+      if (colorField && colorRow) {
+        colorRow.hidden = false;
         colorField.querySelector('.color-preview-note')?.remove();
       }
       if (colorRow) {
-        const hexFor = name => (typeof colorHexes[name] === 'string' && colorHexes[name]) || '#a4a29e';
+        const hexFor = name => {
+          const custom = colorHexes[name] || colorHexes[String(name).toLowerCase()];
+          return (typeof custom === 'string' && custom) || standardColorHexes[String(name).trim().toLowerCase()] || '#a4a29e';
+        };
         colorRow.innerHTML = colors.map((color, position) => {
           const hasPictures = picturesForColor(color).length > 0;
           const picture = picturesForColor(color)[0];
@@ -1056,15 +1069,9 @@
       const paintColors = () => {
         const chosen = selectedColor();
         if (colorLabel) colorLabel.textContent = chosen || '—';
-        if (colorToggle) colorToggle.style.setProperty('--selected-swatch', (typeof colorHexes[chosen] === 'string' && colorHexes[chosen]) || '#a4a29e');
         colorRow?.querySelectorAll('.color-swatch').forEach(button => {
           button.classList.toggle('selected', button.dataset.color === chosen);
         });
-      };
-      const closeColorPicker = () => {
-        if (!colorRow || !colorToggle) return;
-        colorRow.hidden = true;
-        colorToggle.setAttribute('aria-expanded', 'false');
       };
       if (colorRow) {
         colorRow.addEventListener('click', event => {
@@ -1078,18 +1085,6 @@
           /* Swap the product picture(s) to the chosen colour's own images. */
           galleryIndex = 0;
           paintImage();
-          closeColorPicker();
-        });
-        colorToggle?.addEventListener('click', () => {
-          const opening = colorRow.hidden;
-          colorRow.hidden = !opening;
-          colorToggle.setAttribute('aria-expanded', String(opening));
-        });
-        document.addEventListener('click', event => {
-          if (!event.target.closest('.color-row')) closeColorPicker();
-        });
-        document.addEventListener('keydown', event => {
-          if (event.key === 'Escape') closeColorPicker();
         });
         paintColors();
       }
