@@ -1381,6 +1381,35 @@ function filterOrders(term) {
   function pageProducts() {
     const list = $('#products-page-list');
     if (!list) return;
+    if (!list.dataset.productActionsBound) {
+      list.dataset.productActionsBound = 'true';
+      list.addEventListener('click', async event => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const editButton = target.closest('[data-edit-product]');
+        if (editButton && list.contains(editButton)) {
+          openProductEditor(Number(editButton.dataset.editProduct));
+          return;
+        }
+        const deleteButton = target.closest('[data-delete-product]');
+        if (!deleteButton || !list.contains(deleteButton)) return;
+        if (!Store.api.productsOnline) { toast('The shared product server is unavailable. Nothing was deleted.'); return; }
+        const index = Number(deleteButton.dataset.deleteProduct);
+        if (!confirm('Delete ' + Store.state.products[index].name + ' from the catalogue?')) return;
+        if (!Store.removeProduct(index)) { toast(Store.storageError() || 'Could not delete product.'); return; }
+        try {
+          await Store.api.saveProducts(Store.state.products, false);
+          clearLocalProductCache();
+          renderProductsList();
+          initShell();
+          toast('Product deleted');
+        } catch (error) {
+          try { await Store.api.loadAdminProducts(); } catch (reloadError) { console.error('[products] restore after failed delete:', reloadError); }
+          renderProductsList();
+          toast(error.message || 'Could not delete product from Railway.');
+        }
+      });
+    }
     const search = ($('#product-search')?.value || '').trim().toLowerCase();
     const filter = window.__productFilter || 'all';
 
@@ -1399,6 +1428,17 @@ function filterOrders(term) {
       const status = Store.productStatus(product);
       const sold = Store.totalSold(product);
       const inventory = Store.inventoryRows(product);
+      const chipInventory = product.fitOptionsEnabled
+        ? Array.from(inventory.reduce((byColor, row) => {
+          const key = row.color || '';
+          const summary = byColor.get(key) || { color: key, label: 'All options', stock: 0, sold: 0, combinations: 0, price: product.price, cost: product.cost };
+          summary.stock += Number(row.stock) || 0;
+          summary.sold += Number(row.sold) || 0;
+          summary.combinations += 1;
+          byColor.set(key, summary);
+          return byColor;
+        }, new Map()).values())
+        : inventory;
       const value = inventory.reduce((sum, size) => sum + size.stock * (size.price || product.price), 0);
       const cost = inventory.reduce((sum, size) => sum + size.stock * size.cost, 0);
       return `
@@ -1418,10 +1458,10 @@ function filterOrders(term) {
           </div>
         </div>
         <div class="size-chips">
-          ${inventory.map(size => `
+          ${chipInventory.map(size => `
             <button class="size-chip${size.stock <= 0 ? ' is-out' : ''}" data-edit-product="${index}" title="Click to edit">
               <b>${escapeHtml(size.color ? size.color + ' · ' + size.label : size.label)}</b>
-              <span>${size.stock} in stock</span>
+              <span>${size.stock} in stock${product.fitOptionsEnabled ? ' · ' + size.combinations + ' combinations' : ''}</span>
               <em>${money(size.price || product.price)}</em>
               <small>cost ${money(size.cost)}</small>
             </button>`).join('')}
@@ -1435,25 +1475,6 @@ function filterOrders(term) {
         </div>
       </div>`;
     }).join('') || '<p class="muted">No products match this view.</p>';
-
-    $$('[data-edit-product]', list).forEach(button => button.addEventListener('click', () => openProductEditor(Number(button.dataset.editProduct))));
-    $$('[data-delete-product]', list).forEach(button => button.addEventListener('click', async () => {
-      if (!Store.api.productsOnline) { toast('The shared product server is unavailable. Nothing was deleted.'); return; }
-      const index = Number(button.dataset.deleteProduct);
-      if (!confirm('Delete ' + Store.state.products[index].name + ' from the catalogue?')) return;
-      if (!Store.removeProduct(index)) { toast(Store.storageError() || 'Could not delete product.'); return; }
-      try {
-        await Store.api.saveProducts(Store.state.products, false);
-        clearLocalProductCache();
-        renderProductsList();
-        initShell();
-        toast('Product deleted');
-      } catch (error) {
-        try { await Store.api.loadAdminProducts(); } catch (reloadError) { console.error('[products] restore after failed delete:', reloadError); }
-        renderProductsList();
-        toast(error.message || 'Could not delete product from Railway.');
-      }
-    }));
 
     const counter = $('#products-page-count');
     if (counter) counter.textContent = `${rows.length} of ${Store.state.products.length} products`;
