@@ -1386,11 +1386,6 @@ function filterOrders(term) {
       list.addEventListener('click', async event => {
         const target = event.target;
         if (!(target instanceof Element)) return;
-        const editButton = target.closest('[data-edit-product]');
-        if (editButton && list.contains(editButton)) {
-          openProductEditor(Number(editButton.dataset.editProduct));
-          return;
-        }
         const deleteButton = target.closest('[data-delete-product]');
         if (!deleteButton || !list.contains(deleteButton)) return;
         if (!Store.api.productsOnline) { toast('The shared product server is unavailable. Nothing was deleted.'); return; }
@@ -1475,6 +1470,16 @@ function filterOrders(term) {
         </div>
       </div>`;
     }).join('') || '<p class="muted">No products match this view.</p>';
+
+    $$('[data-edit-product]', list).forEach(button => button.addEventListener('click', event => {
+      event.preventDefault();
+      try {
+        openProductEditor(Number(button.dataset.editProduct));
+      } catch (error) {
+        console.error('[products] editor failed to open:', error);
+        toast(error.message || 'Could not open this product for editing.');
+      }
+    }));
 
     const counter = $('#products-page-count');
     if (counter) counter.textContent = `${rows.length} of ${Store.state.products.length} products`;
