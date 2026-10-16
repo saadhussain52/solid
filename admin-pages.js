@@ -8,7 +8,7 @@
   const Store = window.Store;
   if (!Store) return;
 
-  const { money, slugify, escapeHtml } = Store;
+  const { money, slugify, escapeHtml, escapeAttr } = Store;
 
   /* ------------------------------------------------------------ helpers */
 
