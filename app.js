@@ -245,12 +245,22 @@
   /* A bag line is a product in a size in a colour — the same shirt in Bone and in
      Black are two different things to pick, pack and ship, so the colour is part
      of the key rather than a label that gets overwritten. */
-  const cartKey = item => `${item.productIndex}::${item.size || ''}::${item.color || ''}`;
+  const cartKey = item => JSON.stringify([item.productIndex, item.size || '', item.color || '', item.options || {}]);
+  const optionSummary = options => Object.entries(options || {}).map(([label, value]) => `${label}: ${value}`).join(' · ');
+  const stockForCartLine = (product, line) => product.fitOptionsEnabled
+    ? (Store.fitVariantFor(product, line.color, line.options)?.stock || 0)
+    : (line.size ? Store.stockFor(product, line.size, line.color) : Store.totalStock(product));
 
   function addToCart(item) {
     const product = Store.state.products[item.productIndex];
     if (!product) return;
-    if (item.size) {
+    if (product.fitOptionsEnabled) {
+      if (!Store.fitVariantFor(product, item.color, item.options)) {
+        notify('Choose every required option before adding this product');
+        return;
+      }
+      if (Store.fitVariantFor(product, item.color, item.options).stock <= 0) { notify('That colour and option combination is sold out'); return; }
+    } else if (item.size) {
       if (Store.stockFor(product, item.size, item.color) <= 0) { notify(`${product.name} — ${item.color || ''} ${item.size} is sold out`); return; }
     } else if (Store.totalStock(product) <= 0) {
       notify(`${product.name} is sold out`);
@@ -259,10 +269,12 @@
     const key = cartKey(item);
     const existing = cart.filter(line => cartKey(line) === key)[0];
     const inBag = existing ? existing.quantity : 0;
-    const available = item.size ? Store.stockFor(product, item.size, item.color) : Store.totalStock(product);
+    const available = product.fitOptionsEnabled
+      ? Store.fitVariantFor(product, item.color, item.options).stock
+      : (item.size ? Store.stockFor(product, item.size, item.color) : Store.totalStock(product));
     if (inBag >= available) { notify(`Only ${available} left in ${item.color ? item.color + ' ' : ''}${item.size || product.name}`); return; }
     if (existing) existing.quantity += 1;
-    else cart.push({ productIndex: item.productIndex, size: item.size, color: item.color || '', quantity: 1 });
+    else cart.push({ productIndex: item.productIndex, size: item.size || '', color: item.color || '', options: item.options || {}, quantity: 1 });
     saveCart();
     updateCart();
     openDrawer('cart-drawer');
@@ -272,7 +284,7 @@
     return cart.map(line => {
       const product = Store.state.products[line.productIndex];
       if (!product) return null;
-      const price = line.size ? Store.priceFor(product, line.size, line.color) : numOr(product.price);
+      const price = !product.fitOptionsEnabled && line.size ? Store.priceFor(product, line.size, line.color) : numOr(product.price);
       const colorImage = product.colorImages && product.colorImages[line.color];
       const image = Array.isArray(colorImage)
         ? (colorImage.find(Boolean) || product.image)
@@ -311,7 +323,7 @@
         <img src="${escapeHtml(entry.image)}" alt="${escapeHtml(entry.product.name)}${entry.line.color ? ' in ' + escapeHtml(entry.line.color) : ''}">
         <div>
           <h4>${escapeHtml(entry.product.name)}</h4>
-          <p>${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : `<a href="product.html?product=${entry.line.productIndex}">Choose colour</a> · `}${entry.line.size ? `Size ${escapeHtml(entry.line.size)} · ` : ''}${money(entry.price)} × ${entry.line.quantity}</p>
+          <p>${entry.product.sku ? `SKU ${escapeHtml(entry.product.sku)} · ` : ''}${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : `<a href="product.html?product=${entry.line.productIndex}">Choose colour</a> · `}${entry.product.fitOptionsEnabled ? `${escapeHtml(optionSummary(entry.line.options))} · ` : entry.line.size ? `Size ${escapeHtml(entry.line.size)} · ` : ''}${money(entry.price)} × ${entry.line.quantity}</p>
           <div class="cart-quantity">
             <button data-cart-dec="${index}" aria-label="Decrease quantity">−</button>
             <span>${entry.line.quantity}</span>
@@ -337,7 +349,7 @@
       const index = Number(button.dataset.cartInc);
       const line = cart[index];
       const product = Store.state.products[line.productIndex];
-      const available = line.size ? Store.stockFor(product, line.size, line.color) : Store.totalStock(product);
+      const available = stockForCartLine(product, line);
       if (line.quantity >= available) { notify(`Only ${available} available`); return; }
       line.quantity += 1;
       saveCart();
@@ -557,7 +569,7 @@
         <img src="${escapeAttr(entry.image || '')}" alt="${escapeAttr(entry.product.name + (entry.line.color ? ' in ' + entry.line.color : ''))}">
         <div>
           <strong>${escapeHtml(entry.product.name)}</strong>
-          <span>${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : 'Colour not selected · '}${escapeHtml(entry.line.size || 'Size not selected')} · Qty ${entry.line.quantity}</span>
+          <span>${entry.product.sku ? `SKU ${escapeHtml(entry.product.sku)} · ` : ''}${entry.line.color ? `${escapeHtml(entry.line.color)} · ` : 'Colour not selected · '}${entry.product.fitOptionsEnabled ? escapeHtml(optionSummary(entry.line.options)) : escapeHtml(entry.line.size || 'Size not selected')} · Qty ${entry.line.quantity}</span>
         </div>
         <em>${money(entry.total)}</em>
       </div>`).join('');
@@ -621,8 +633,10 @@
     const email = modal.querySelector('#co-email').value.trim();
     const items = lines.map(entry => ({
       name: entry.product.name,
+      sku: entry.product.sku || '',
       color: entry.line.color || '',
       size: entry.line.size || '',
+      options: entry.line.options || {},
       qty: entry.line.quantity,
       price: entry.price
     }));
@@ -740,7 +754,7 @@
       `Payment:     ${payment}`,
       '',
       'Items:',
-      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.color || 'Colour not recorded', item.size || 'Size not recorded'].join(' / ')}) — ${money(item.price * item.qty)}`),
+      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.sku ? 'SKU ' + item.sku : '', item.color || 'Colour not recorded', optionSummary(item.options) || item.size || 'Size not recorded'].filter(Boolean).join(' / ')}) — ${money(item.price * item.qty)}`),
       '',
       `Subtotal: ${money(quote.subtotal || 0)}`,
       `${chargeLabel}${order.city ? ' (' + order.city + ')' : ''}: ${chargeAmount}`,
@@ -760,7 +774,7 @@
       `Placed: ${order.date}`,
       `Payment: ${payment}`,
       'Items:',
-      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.color || 'Colour not recorded', item.size || 'Size not recorded'].join(' / ')}) — ${money(item.price * item.qty)}`),
+      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.sku ? 'SKU ' + item.sku : '', item.color || 'Colour not recorded', optionSummary(item.options) || item.size || 'Size not recorded'].filter(Boolean).join(' / ')}) — ${money(item.price * item.qty)}`),
       `Total: ${money(total)} PKR`,
       `Track: ${trackUrl}`
     ].join('\n');
@@ -879,7 +893,7 @@
         ${trackBlock}
 
         <div class="confirm-items">
-          ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${escapeHtml(item.color || 'Colour not recorded')} · ${escapeHtml(item.size || 'Size not recorded')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
+          ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${item.sku ? 'SKU ' + escapeHtml(item.sku) + ' · ' : ''}${escapeHtml(item.color || 'Colour not recorded')} · ${escapeHtml(optionSummary(item.options) || item.size || 'Size not recorded')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
         </div>
 
         <div class="co-charges">
@@ -1003,6 +1017,110 @@
         const firstAvailable = sizes.find(size => size.stock > 0) || sizes[0];
         return active ? active.dataset.size : (firstAvailable ? firstAvailable.label : '');
       };
+      const fitOptionGroups = product.fitOptionsEnabled && Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
+      const fitOptionsEnabled = product.fitOptionsEnabled && fitOptionGroups.length > 0;
+      const fitSelections = {};
+      const fitHost = document.createElement('div');
+      fitHost.className = 'fit-options-customer';
+      if (fitOptionsEnabled && sizeRow) {
+        const sizeLabel = sizeRow.previousElementSibling;
+        if (sizeLabel) sizeLabel.hidden = true;
+        sizeRow.hidden = true;
+        sizeRow.insertAdjacentElement('afterend', fitHost);
+        fitHost.innerHTML = fitOptionGroups.map((group, groupIndex) => {
+          if (group.display === 'radio') {
+            return `<fieldset class="fit-option-choice"><legend>${escapeHtml(group.label)} <span aria-hidden="true">*</span></legend><div>${group.values.map((value, valueIndex) =>
+              `<label><input type="radio" name="fit-option-${groupIndex}" value="${escapeAttr(value)}"><span>${escapeHtml(value)}</span></label>`
+            ).join('')}</div></fieldset>`;
+          }
+          return `<label class="fit-option-select">${escapeHtml(group.label)} <span aria-hidden="true">*</span><select data-fit-option="${escapeAttr(group.label)}"><option value="">Choose one</option>${group.values.map(value =>
+            `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`
+          ).join('')}</select></label>`;
+        }).join('');
+        fitOptionGroups.forEach((group, groupIndex) => {
+          fitHost.querySelectorAll(`[name="fit-option-${groupIndex}"]`).forEach(input => input.addEventListener('change', () => {
+            fitSelections[group.label] = input.value;
+            update();
+          }));
+        });
+        fitHost.querySelectorAll('[data-fit-option]').forEach(select => select.addEventListener('change', () => {
+          fitSelections[select.dataset.fitOption] = select.value;
+          update();
+        }));
+      }
+      const fitSelectionsComplete = () => fitOptionsEnabled && fitOptionGroups.every(group => fitSelections[group.label]);
+      const selectedFitVariant = () => Store.fitVariantFor(product, selectedColor(), fitSelections);
+
+      const skuLine = document.createElement('span');
+      skuLine.className = 'detail-sku';
+      skuLine.id = 'detail-sku';
+      const availability = document.querySelector('.availability');
+      if (availability) {
+        skuLine.hidden = !product.sku;
+        skuLine.textContent = product.sku ? 'SKU: ' + product.sku : '';
+        availability.insertAdjacentElement('afterend', skuLine);
+      }
+      const mediaLinks = document.createElement('div');
+      mediaLinks.className = 'product-detail-links';
+      const sizeChartButton = product.sizeChart
+        ? `<button type="button" data-open-size-chart>Size chart</button>`
+        : '';
+      mediaLinks.innerHTML = `${sizeChartButton}<a href="shipping.html">Delivery &amp; Returns</a>`;
+      const productActions = document.querySelector('.product-actions');
+      if (productActions) productActions.insertAdjacentElement('beforebegin', mediaLinks);
+      const splitImageHost = document.createElement('div');
+      splitImageHost.className = 'product-split-images';
+      splitImageHost.hidden = true;
+      detailImage.insertAdjacentElement('afterend', splitImageHost);
+      const zoomViewer = document.createElement('div');
+      zoomViewer.className = 'product-image-zoom';
+      zoomViewer.setAttribute('role', 'dialog');
+      zoomViewer.setAttribute('aria-modal', 'true');
+      zoomViewer.setAttribute('aria-label', 'Product image zoom');
+      zoomViewer.hidden = true;
+      zoomViewer.innerHTML = '<button type="button" class="product-image-zoom-close" aria-label="Close image zoom">×</button><img alt="">';
+      document.body.appendChild(zoomViewer);
+      const zoomImage = zoomViewer.querySelector('img');
+      let zoomScale = 1;
+      const openZoom = (source, alt) => {
+        if (!source) return;
+        zoomImage.src = source;
+        zoomImage.alt = alt || product.name;
+        zoomScale = 1;
+        zoomImage.style.transform = 'scale(1)';
+        zoomViewer.hidden = false;
+        document.body.classList.add('image-zoom-open');
+        zoomViewer.querySelector('.product-image-zoom-close').focus();
+      };
+      const closeZoom = () => {
+        zoomViewer.hidden = true;
+        zoomImage.removeAttribute('src');
+        zoomScale = 1;
+        zoomImage.style.transform = 'scale(1)';
+        document.body.classList.remove('image-zoom-open');
+      };
+      zoomViewer.querySelector('.product-image-zoom-close').addEventListener('click', closeZoom);
+      zoomViewer.addEventListener('click', event => { if (event.target === zoomViewer) closeZoom(); });
+      zoomImage.addEventListener('click', () => {
+        zoomScale = zoomScale === 1 ? 2 : 1;
+        zoomImage.style.transform = `scale(${zoomScale})`;
+      });
+      zoomViewer.addEventListener('wheel', event => {
+        if (zoomViewer.hidden) return;
+        event.preventDefault();
+        zoomScale = Math.max(1, Math.min(4, zoomScale + (event.deltaY < 0 ? 0.25 : -0.25)));
+        zoomImage.style.transform = `scale(${zoomScale})`;
+      }, { passive: false });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape' && !zoomViewer.hidden) closeZoom(); });
+      detailImage.addEventListener('click', () => openZoom(detailImage.src, detailImage.alt));
+      const zoomButton = document.createElement('button');
+      zoomButton.type = 'button';
+      zoomButton.className = 'image-zoom-trigger';
+      zoomButton.setAttribute('aria-label', 'Zoom product image');
+      zoomButton.textContent = '+';
+      zoomButton.addEventListener('click', () => openZoom(currentZoomSource, detailImage.alt));
+      document.querySelector('.product-detail-image')?.appendChild(zoomButton);
+      mediaLinks.querySelector('[data-open-size-chart]')?.addEventListener('click', () => openZoom(product.sizeChart, product.name + ' size chart'));
 
       /* Colour pictures uploaded from the admin panel, keyed by colour name.
          A colour may hold a single picture or a list of pictures. */
@@ -1097,9 +1215,10 @@
         const label = selectedSize();
         const quantity = Number(quantityEl.textContent) || 1;
         const color = selectedColor();
-        const price = Store.priceFor(product, label, color);
-        const stock = Store.stockFor(product, label, color);
-        const compare = Store.compareAtPriceFor(product, label, color);
+        const fitVariant = fitOptionsEnabled ? selectedFitVariant() : null;
+        const price = fitOptionsEnabled ? numOr(product.price) : Store.priceFor(product, label, color);
+        const stock = fitOptionsEnabled ? (fitVariant ? fitVariant.stock : 0) : Store.stockFor(product, label, color);
+        const compare = fitOptionsEnabled ? 0 : Store.compareAtPriceFor(product, label, color);
         if (detailPrice) {
           detailPrice.textContent = money(price);
           detailPrice.classList.toggle('is-sale', compare > price);
@@ -1111,14 +1230,19 @@
         const subtotalEl = document.querySelector('#detail-subtotal');
         if (subtotalEl) subtotalEl.textContent = money(price * quantity);
         const sizeLabel = document.querySelector('#selected-size');
-        if (sizeLabel) sizeLabel.textContent = label || '—';
-        const availability = document.querySelector('.availability strong');
-        if (availability) availability.textContent = stock > 0 ? label + ' · ' + stock + ' in stock' : label + ' · Out of stock';
+        if (sizeLabel && !fitOptionsEnabled) sizeLabel.textContent = label || '—';
+        const availabilityStatus = document.querySelector('.availability strong');
+        if (availabilityStatus) {
+          availabilityStatus.textContent = fitOptionsEnabled
+            ? (!fitSelectionsComplete() ? 'Select all options' : (stock > 0 ? stock + ' in stock' : 'Out of stock'))
+            : (stock > 0 ? label + ' · ' + stock + ' in stock' : label + ' · Out of stock');
+        }
         sizeRow?.querySelectorAll('button').forEach(button => {
           button.classList.toggle('selected', button.dataset.size === label);
         });
       };
 
+      let currentZoomSource = product.image;
       const paintImage = () => {
         const active = colorRow && colorRow.querySelector('.color-swatch.selected');
         const chosen = active ? active.dataset.color : '';
@@ -1128,12 +1252,30 @@
         const gallerySources = colorPictures.length
           ? colorPictures
           : (product.gallery && product.gallery.length ? product.gallery : [product.image]);
-        if (galleryIndex >= gallerySources.length) galleryIndex = 0;
-        detailImage.src = gallerySources[galleryIndex] || product.image;
+        const splitView = product.splitImageView && gallerySources.length > 1;
+        const galleryGroups = splitView
+          ? Array.from({ length: Math.ceil(gallerySources.length / 2) }, (_, position) => gallerySources.slice(position * 2, position * 2 + 2))
+          : gallerySources.map(source => [source]);
+        if (galleryIndex >= galleryGroups.length) galleryIndex = 0;
+        const shownImages = galleryGroups[galleryIndex] || [gallerySources[0] || product.image];
+        detailImage.hidden = splitView;
+        splitImageHost.hidden = !splitView;
         detailImage.alt = chosen ? product.name + ' in ' + chosen : product.name;
+        if (splitView) {
+          currentZoomSource = shownImages[0];
+          splitImageHost.classList.toggle('is-single', shownImages.length === 1);
+          splitImageHost.innerHTML = shownImages.map((source, position) =>
+            `<button type="button" data-zoom-image="${escapeAttr(source)}" aria-label="Zoom ${escapeAttr(product.name)} image ${position + 1}"><img src="${escapeAttr(source)}" alt="${escapeAttr(product.name)} view ${galleryIndex * 2 + position + 1}"></button>`).join('');
+          splitImageHost.querySelectorAll('[data-zoom-image]').forEach(button => button.addEventListener('click', () => {
+            openZoom(button.dataset.zoomImage, product.name + (chosen ? ' in ' + chosen : ''));
+          }));
+        } else {
+          detailImage.src = shownImages[0] || product.image;
+          currentZoomSource = detailImage.src;
+        }
         if (gallery) {
-          gallery.innerHTML = gallerySources.map((source, position) =>
-            `<button data-gallery="${position}" class="${position === galleryIndex ? 'active' : ''}"><img src="${escapeHtml(source)}" alt="${escapeHtml(product.name)} view ${position + 1}"></button>`).join('');
+          gallery.innerHTML = galleryGroups.map((images, position) =>
+            `<button data-gallery="${position}" class="${position === galleryIndex ? 'active' : ''}${splitView ? ' split-gallery-thumb' : ''}" aria-label="${escapeAttr(product.name)} gallery view ${position + 1}">${images.map(source => `<img src="${escapeAttr(source)}" alt="${escapeAttr(product.name)} view">`).join('')}</button>`).join('');
           gallery.querySelectorAll('[data-gallery]').forEach(button => button.addEventListener('click', () => {
             galleryIndex = Number(button.dataset.gallery);
             paintImage();
@@ -1190,11 +1332,33 @@
       });
 
       document.querySelector('.detail-add')?.addEventListener('click', () => {
+        if (fitOptionsEnabled) {
+          const missing = fitOptionGroups.find(group => !fitSelections[group.label]);
+          if (missing) {
+            notify('Please choose ' + missing.label);
+            const control = fitHost.querySelector(`[data-fit-option="${CSS.escape(missing.label)}"]`) || fitHost.querySelector(`[name="fit-option-${fitOptionGroups.indexOf(missing)}"]`);
+            control?.focus();
+            return;
+          }
+          const variant = selectedFitVariant();
+          if (!variant || variant.stock <= 0) { notify('That colour and option combination is out of stock'); return; }
+          addToCart({ productIndex: index, color: selectedColor(), options: Object.assign({}, fitSelections), quantity: 1 });
+          return;
+        }
         const label = selectedSize();
         if (Store.stockFor(product, label, selectedColor()) <= 0) { notify(selectedColor() + ' / ' + label + ' is out of stock'); return; }
         addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });
       });
       document.querySelector('.buy-now')?.addEventListener('click', () => {
+        if (fitOptionsEnabled) {
+          const missing = fitOptionGroups.find(group => !fitSelections[group.label]);
+          if (missing) { notify('Please choose ' + missing.label); return; }
+          const variant = selectedFitVariant();
+          if (!variant || variant.stock <= 0) { notify('That colour and option combination is out of stock'); return; }
+          addToCart({ productIndex: index, color: selectedColor(), options: Object.assign({}, fitSelections), quantity: 1 });
+          window.setTimeout(openCheckout, 350);
+          return;
+        }
         const label = selectedSize();
         if (Store.stockFor(product, label, selectedColor()) <= 0) { notify(selectedColor() + ' / ' + label + ' is out of stock'); return; }
         addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });

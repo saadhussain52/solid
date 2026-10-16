@@ -772,6 +772,25 @@ const handleCreate = async (req, res) => {
     return json(res, 400, { ok: false, error: 'That email address does not look right.' });
   }
 
+  const products = loadProducts();
+  if (products) {
+    for (const item of items) {
+      const product = products.find(candidate => candidate.name === item.name);
+      if (!product || !product.fitOptionsEnabled) continue;
+      const options = item.options && typeof item.options === 'object' ? item.options : {};
+      const groups = Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
+      const values = groups.map(group => String(options[group.label] || ''));
+      if (!groups.length || values.some(value => !value)) {
+        return json(res, 400, { ok: false, error: 'Choose every required product option before ordering.' });
+      }
+      const variantKey = JSON.stringify([String(item.color || '')].concat(values));
+      const variant = (product.fitVariants || []).find(entry => entry.key === variantKey);
+      const quantity = Math.max(1, Number(item.qty) || 1);
+      if (!variant) return json(res, 400, { ok: false, error: 'That product option combination is not available.' });
+      if ((Number(variant.stock) || 0) < quantity) return json(res, 409, { ok: false, error: 'That product option combination is out of stock.' });
+    }
+  }
+
   const orders = loadOrders();
   const total = Number(body.total);
   const order = {
@@ -794,11 +813,22 @@ const handleCreate = async (req, res) => {
   orders.unshift(order);
   saveOrders(orders);
   try {
-    const products = loadProducts();
     if (products) {
       order.items.forEach(item => {
         const product = products.find(candidate => candidate.name === item.name);
         if (!product) return;
+        if (product.fitOptionsEnabled && Array.isArray(product.fitOptionGroups) && Array.isArray(product.fitVariants)) {
+          const options = item.options && typeof item.options === 'object' ? item.options : {};
+          const variantKey = JSON.stringify([String(item.color || '')].concat(product.fitOptionGroups.map(group => String(options[group.label] || ''))));
+          const fitVariant = product.fitVariants.find(variant => variant.key === variantKey);
+          if (fitVariant) {
+            const quantity = Math.max(0, Number(item.qty) || 1);
+            fitVariant.stock = Math.max(0, (Number(fitVariant.stock) || 0) - quantity);
+            fitVariant.sold = (Number(fitVariant.sold) || 0) + quantity;
+            product.sold = product.fitVariants.reduce((sum, variant) => sum + (Number(variant.sold) || 0), 0);
+            return;
+          }
+        }
         const colorSizes = product.colorVariants && Array.isArray(product.colorVariants[item.color])
           ? product.colorVariants[item.color]
           : null;

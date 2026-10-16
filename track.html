@@ -242,7 +242,7 @@
           ${cancelled ? '' : `<div class="track-steps">${steps}</div>`}
 
           <div class="track-items">
-            ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${escapeHtml(item.color || 'Colour not recorded')} · ${escapeHtml(item.size || 'Size not recorded')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
+            ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${item.sku ? 'SKU ' + escapeHtml(item.sku) + ' · ' : ''}${escapeHtml(item.color || 'Colour not recorded')} · ${escapeHtml(item.options ? Object.entries(item.options).map(([label, value]) => `${label}: ${value}`).join(' · ') : item.size || 'Size not recorded')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
           </div>
 
           <div class="track-items" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">

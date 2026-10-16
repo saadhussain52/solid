@@ -370,6 +370,27 @@
        transparent garment silhouettes aligned with the main product image. */
     base.colorImages = base.colorImages && typeof base.colorImages === 'object' && !Array.isArray(base.colorImages) ? base.colorImages : {};
     base.colorMasks = base.colorMasks && typeof base.colorMasks === 'object' && !Array.isArray(base.colorMasks) ? base.colorMasks : {};
+    base.sku = String(base.sku || '').trim();
+    base.sizeChart = typeof base.sizeChart === 'string' ? base.sizeChart : '';
+    base.splitImageView = Boolean(base.splitImageView);
+    base.fitOptionsEnabled = Boolean(base.fitOptionsEnabled);
+    base.fitOptionGroups = Array.isArray(base.fitOptionGroups) ? base.fitOptionGroups.map(function (group) {
+      return {
+        label: String(group && group.label || '').trim(),
+        display: group && group.display === 'radio' ? 'radio' : 'select',
+        values: Array.isArray(group && group.values) ? group.values.map(function (value) { return String(value).trim(); }).filter(Boolean) : []
+      };
+    }).filter(function (group) { return group.label && group.values.length; }) : [];
+    base.fitVariants = Array.isArray(base.fitVariants) ? base.fitVariants.map(function (variant) {
+      var values = Array.isArray(variant && variant.values) ? variant.values.map(String) : [];
+      return {
+        key: String(variant && variant.key || fitVariantKey(variant && variant.color, values)),
+        color: String(variant && variant.color || ''),
+        values: values,
+        stock: Math.max(0, num(variant && variant.stock)),
+        sold: Math.max(0, num(variant && variant.sold))
+      };
+    }) : [];
     base.description = base.description || meta.description;
     base.reviews = (Array.isArray(base.reviews) && base.reviews.length) ? base.reviews : meta.reviews;
     base.faqs = (Array.isArray(base.faqs) && base.faqs.length) ? base.faqs : meta.faqs;
@@ -453,6 +474,22 @@
   }
 
   function inventoryRows(product) {
+    if (product && product.fitOptionsEnabled && Array.isArray(product.fitVariants)) {
+      var groups = product.fitOptionGroups || [];
+      return product.fitVariants.map(function (variant) {
+        return {
+          color: variant.color,
+          label: groups.map(function (group, index) {
+            return group.label + ': ' + (variant.values[index] || '');
+          }).join(' · '),
+          stock: variant.stock,
+          sold: variant.sold,
+          cost: num(product.cost),
+          price: num(product.price),
+          compareAtPrice: 0
+        };
+      });
+    }
     var variants = product && product.colorVariants;
     var colors = variants && Object.keys(variants).filter(function (color) { return Array.isArray(variants[color]); });
     if (colors && colors.length) {
@@ -467,6 +504,19 @@
     var found = null;
     sizesFor(product, color).forEach(function (size) { if (size.label === label) found = size; });
     return found;
+  }
+
+  function fitVariantKey(color, values) {
+    return JSON.stringify([String(color || '')].concat((values || []).map(function (value) { return String(value || ''); })));
+  }
+
+  function fitVariantFor(product, color, selections) {
+    var groups = product && Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
+    if (!product || !product.fitOptionsEnabled || !groups.length) return null;
+    var values = groups.map(function (group) { return String(selections && selections[group.label] || ''); });
+    if (values.some(function (value) { return !value; })) return null;
+    var key = fitVariantKey(color, values);
+    return (product.fitVariants || []).find(function (variant) { return variant.key === key; }) || null;
   }
 
   function stockFor(product, label, color) {
@@ -559,14 +609,35 @@
     var record = {
       name: payload.name,
       description: payload.description || '',
+      sku: String(payload.sku || '').trim(),
       category: slugify(payload.category),
       image: payload.image || IMAGE.fallback,
       gallery: (payload.gallery && payload.gallery.length ? payload.gallery : [payload.image || IMAGE.fallback]),
+      sizeChart: payload.sizeChart || '',
+      splitImageView: Boolean(payload.splitImageView),
       colorImages: payload.colorImages || (state.products[index] && state.products[index].colorImages) || {},
       colorMasks: payload.colorMasks || (state.products[index] && state.products[index].colorMasks) || {},
       tag: payload.tag || '',
       colors: payload.colors && payload.colors.length ? payload.colors : DEFAULT_COLORS.slice(),
       colorVariants: colorVariants,
+      fitOptionsEnabled: Boolean(payload.fitOptionsEnabled),
+      fitOptionGroups: (payload.fitOptionGroups || []).map(function (group) {
+        return {
+          label: String(group.label || '').trim(),
+          display: group.display === 'radio' ? 'radio' : 'select',
+          values: (group.values || []).map(function (value) { return String(value).trim(); }).filter(Boolean)
+        };
+      }),
+      fitVariants: (payload.fitVariants || []).map(function (variant) {
+        var values = (variant.values || []).map(String);
+        return {
+          key: String(variant.key || fitVariantKey(variant.color, values)),
+          color: String(variant.color || ''),
+          values: values,
+          stock: Math.max(0, num(variant.stock)),
+          sold: Math.max(0, num(variant.sold))
+        };
+      }),
       price: num(payload.price),
       cost: num(payload.cost),
       sold: sizes.reduce(function (sum, size) { return sum + (Number(size.sold) || 0); }, 0),
@@ -583,7 +654,9 @@
       reviews: payload.reviews || [],
       faqs: payload.faqs || []
     };
-    record.sold = record.sold || num(payload.sold);
+    record.sold = record.fitOptionsEnabled
+      ? record.fitVariants.reduce(function (sum, variant) { return sum + variant.sold; }, 0)
+      : (record.sold || num(payload.sold));
     /* The old product record has to be kept until the write succeeds. If storage
        is full, setItem throws and the in-memory list would keep the new product
        while the page keeps the old one — a save that looks fine but silently
@@ -1141,6 +1214,8 @@
     state: state,
     save: save,
     sizeOf: sizeOf,
+    fitVariantKey: fitVariantKey,
+    fitVariantFor: fitVariantFor,
     stockFor: stockFor,
     priceFor: priceFor,
     compareAtPriceFor: compareAtPriceFor,

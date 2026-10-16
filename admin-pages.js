@@ -222,6 +222,7 @@
     };
     product.image = await upload(product.image);
     product.gallery = await Promise.all((product.gallery || []).map(upload));
+    product.sizeChart = await upload(product.sizeChart);
     for (const field of ['colorImages', 'colorMasks']) {
       const images = product[field] || {};
       for (const key of Object.keys(images)) {
@@ -315,6 +316,10 @@
     });
     const statusLine = $('[data-editor-stock-status]', root);
     if (statusLine) {
+      if (root.classList.contains('fit-options-active')) {
+        stock = $$('[data-fit-stock]', root).reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+        sold = $$('[data-fit-sold]', root).reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+      }
       const value = stock > 0 ? (stock <= 10 ? 'Low stock' : 'In stock') : 'Sold out';
       statusLine.textContent = `${value} · ${stock} units`;
       statusLine.className = 'status ' + (stock <= 10 ? 'low-stock' : 'in-stock');
@@ -358,6 +363,7 @@
           <div class="editor-main">
             <label>Product name<input data-field="name" value="${escapeHtml(product ? product.name : '')}" required></label>
             <label>Description<textarea data-field="description" rows="3">${escapeHtml(product ? product.description : '')}</textarea></label>
+            <label>SKU<input data-field="sku" value="${escapeHtml(product ? product.sku || '' : '')}" placeholder="e.g. BURGUNDYKENDALL-0173"></label>
 
             <h4 class="editor-subhead">Colours &amp; colour pictures</h4>
             <p class="editor-hint">Add each colour and upload the picture(s) for that colour. The first colour's first picture becomes the product's main photo, and every picture you add here fills the product gallery. When a customer clicks a colour on the website, that colour's exact pictures appear in its place.</p>
@@ -368,8 +374,17 @@
               </div>
             </div>
 
-            <h4 class="editor-subhead">Sizes, stock &amp; pricing by colour</h4>
-            <p class="editor-hint">Set stock and prices separately for every colour and size. Add an optional was price to show a crossed-out sale price on the website.</p>
+            <h4 class="editor-subhead" data-legacy-size-heading>Sizes, stock &amp; pricing by colour</h4>
+            <p class="editor-hint" data-legacy-size-help>Set stock and prices separately for every colour and size. Add an optional was price to show a crossed-out sale price on the website.</p>
+
+            <h4 class="editor-subhead">Customer size &amp; length options</h4>
+            <label class="fit-options-enable"><input type="checkbox" data-fit-enabled${product && product.fitOptionsEnabled ? ' checked' : ''}> Enable custom required options for this product</label>
+            <div class="fit-options-editor" data-fit-editor${product && product.fitOptionsEnabled ? '' : ' hidden'}>
+              <p class="editor-hint">Customers must choose every option. Stock is tracked for each colour and complete option combination. Add one option group per choice, such as Shirt Size or Pant Length. When converting an existing product, its current stock is prefilled in the first combination—redistribute it across the combinations before saving.</p>
+              <div class="fit-option-groups" data-fit-groups></div>
+              <button type="button" class="button button-small" data-add-fit-group>Add option group</button>
+              <div class="fit-stock-matrix" data-fit-stock></div>
+            </div>
 
             <h4 class="editor-subhead">Base price &amp; badge</h4>
             <div class="form-columns">
@@ -384,6 +399,15 @@
               ${Store.state.categories.filter(category => category !== 'New Arrivals')
                 .map(category => `<option value="${slugify(category)}"${product && product.category === slugify(category) ? ' selected' : ''}>${escapeHtml(category)}</option>`).join('')}
             </select></label>
+            <label>Size chart image
+              <span class="size-chart-editor" data-size-chart>
+                <img data-size-chart-preview${product && product.sizeChart ? ` src="${escapeAttr(product.sizeChart)}"` : ''} alt="Size chart preview"${product && product.sizeChart ? '' : ' hidden'}>
+                <button type="button" class="button button-small" data-upload-size-chart>${product && product.sizeChart ? 'Replace chart' : 'Upload chart'}</button>
+                <button type="button" class="button button-small ghost" data-remove-size-chart${product && product.sizeChart ? '' : ' hidden'}>Remove</button>
+              </span>
+            </label>
+            <label class="split-image-toggle"><input type="checkbox" data-split-images${product && product.splitImageView ? ' checked' : ''}> Show product photos two at a time side by side</label>
+            <p class="editor-hint">Photos are paired in upload order for the main product image. Click a product photo to zoom; scroll or click again to magnify further.</p>
             <p class="editor-hint">Product photos now come from the colours above — the first picture you add is used as the main image, and the rest appear in the gallery.</p>
           </aside>
         </div>
@@ -423,10 +447,122 @@
             sold: Array.isArray(savedVariants[name]) ? sold : Math.floor(sold / divisor) + (colorIndex < sold % divisor ? 1 : 0)
           });
         });
-        return { name, images, sizes: variantSizes, isLegacyFallback };
+        return { name, committedName: name, images, sizes: variantSizes, isLegacyFallback };
       });
     };
     colorEntries = readSavedColors();
+    const FIT_OPTION_DEFAULTS = [
+      { label: 'Shirt Size', display: 'select', values: ['XS', 'S', 'M', 'L', 'XL'] },
+      { label: 'Pant Size', display: 'select', values: ['XS', 'S', 'M', 'L', 'XL'] },
+      { label: 'Shirt Length', display: 'radio', values: ['44', '46', '48 (Standard)', '50'] },
+      { label: 'Pant Length', display: 'radio', values: ['32', '34 (Standard)', '36', '38'] }
+    ];
+    let fitGroups = product && Array.isArray(product.fitOptionGroups)
+      ? product.fitOptionGroups.map(group => ({ label: group.label, display: group.display, values: group.values.slice() }))
+      : [];
+    let fitVariants = product && Array.isArray(product.fitVariants) ? product.fitVariants.map(variant => Object.assign({}, variant)) : [];
+    let fitCombinationCount = 0;
+    const fitEditor = $('[data-fit-editor]', modal);
+    const fitGroupsHost = $('[data-fit-groups]', modal);
+    const fitStockHost = $('[data-fit-stock]', modal);
+    const skuInput = $('[data-field="sku"]', modal);
+    const chartImage = $('[data-size-chart-preview]', modal);
+    let sizeChart = product && product.sizeChart || '';
+    const initialFitStock = product
+      ? Object.keys(product.colorVariants || {}).reduce((total, color) => total + (product.colorVariants[color] || []).reduce((sum, size) => sum + (Number(size.stock) || 0), 0), 0)
+        || (product.sizes || []).reduce((sum, size) => sum + (Number(size.stock) || 0), 0)
+      : 0;
+    const initialFitSold = product
+      ? Object.keys(product.colorVariants || {}).reduce((total, color) => total + (product.colorVariants[color] || []).reduce((sum, size) => sum + (Number(size.sold) || 0), 0), 0)
+        || (product.sizes || []).reduce((sum, size) => sum + (Number(size.sold) || 0), 0)
+      : 0;
+
+    const readFitGroups = () => $$('[data-fit-group]', fitGroupsHost).map(row => ({
+      label: $('[data-fit-label]', row).value.trim(),
+      display: $('[data-fit-display]', row).value === 'radio' ? 'radio' : 'select',
+      values: $('[data-fit-values]', row).value.split(',').map(value => value.trim()).filter(Boolean)
+    }));
+    const paintFitGroups = () => {
+      fitGroupsHost.innerHTML = fitGroups.map((group, index) => `
+        <div class="fit-option-group" data-fit-group="${index}">
+          <label>Option name<input data-fit-label value="${escapeHtml(group.label)}" placeholder="e.g. Shirt Size"></label>
+          <label>Choices, comma separated<textarea data-fit-values rows="2" placeholder="XS, S, M, L, XL">${escapeHtml(group.values.join(', '))}</textarea></label>
+          <label>Display<select data-fit-display><option value="select"${group.display === 'select' ? ' selected' : ''}>Dropdown</option><option value="radio"${group.display === 'radio' ? ' selected' : ''}>Round choices</option></select></label>
+          <button type="button" class="row-danger" data-remove-fit-group="${index}" aria-label="Remove option group">×</button>
+        </div>`).join('');
+    };
+    const syncFitStockFromInputs = () => {
+      if (!fitStockHost) return;
+      const valuesByKey = new Map(fitVariants.map(variant => [variant.key, variant]));
+      $$('[data-fit-stock-row]', fitStockHost).forEach(row => {
+        const key = row.dataset.fitKey;
+        const previous = valuesByKey.get(key) || { key, color: row.dataset.fitColor, values: JSON.parse(row.dataset.fitValues || '[]'), sold: 0 };
+        valuesByKey.set(key, Object.assign({}, previous, { stock: Number($('[data-fit-stock]', row).value) || 0 }));
+      });
+      fitVariants = Array.from(valuesByKey.values());
+    };
+    const paintFitStock = () => {
+      if (!fitStockHost) return;
+      fitCombinationCount = 0;
+      syncFitStockFromInputs();
+      fitGroups = readFitGroups();
+      const invalid = fitGroups.some(group => !group.label || !group.values.length || new Set(group.values).size !== group.values.length);
+      if (!fitGroups.length || invalid) {
+        fitStockHost.innerHTML = '<p class="file-help">Add a name and at least one unique choice to every option group to set combination stock.</p>';
+        return;
+      }
+      const colorNames = colorEntries.map(entry => entry.name.trim()).filter(Boolean);
+      const colors = colorNames.length ? colorNames : [''];
+      const combinations = [];
+      const addCombinations = (position, values, color) => {
+        if (position === fitGroups.length) {
+          combinations.push({ color, values: values.slice(), key: Store.fitVariantKey(color, values) });
+          return;
+        }
+        fitGroups[position].values.forEach(value => addCombinations(position + 1, values.concat(value), color));
+      };
+      colors.forEach(color => addCombinations(0, [], color));
+      fitCombinationCount = combinations.length;
+      if (combinations.length > 2000) {
+        fitStockHost.innerHTML = `<p class="danger-text">These choices create ${combinations.length} colour/option combinations. Reduce the choices to 2,000 or fewer before saving stock.</p>`;
+        return;
+      }
+      const existing = new Map(fitVariants.map(variant => [variant.key, variant]));
+      const nextKeys = new Set(combinations.map(combo => combo.key));
+      const orphanedStock = fitVariants.filter(variant => !nextKeys.has(variant.key)).reduce((total, variant) => total + (Number(variant.stock) || 0), 0);
+      const orphanedSold = fitVariants.filter(variant => !nextKeys.has(variant.key)).reduce((total, variant) => total + (Number(variant.sold) || 0), 0);
+      if (!fitVariants.length && product && combinations.length) {
+        const first = combinations[0];
+        existing.set(first.key, {
+          key: first.key,
+          color: first.color,
+          values: first.values,
+          stock: initialFitStock,
+          sold: initialFitSold
+        });
+      }
+      fitVariants = combinations.map((combo, index) => {
+        const saved = existing.get(combo.key);
+        const variant = saved ? Object.assign({}, saved, combo) : Object.assign({}, combo, { stock: 0, sold: 0 });
+        if (index === 0) {
+          variant.stock += orphanedStock;
+          variant.sold += orphanedSold;
+        }
+        return variant;
+      });
+      fitStockHost.innerHTML = `<h5>Stock by complete combination</h5><div class="fit-stock-rows">${fitVariants.map(variant => `
+        <div class="fit-stock-row" data-fit-stock-row data-fit-key="${escapeAttr(variant.key)}" data-fit-color="${escapeAttr(variant.color)}" data-fit-values="${escapeAttr(JSON.stringify(variant.values))}">
+          <span>${escapeHtml([variant.color, ...fitGroups.map((group, index) => group.label + ': ' + (variant.values[index] || ''))].filter(Boolean).join(' · '))}</span>
+          <label>In stock<input type="number" min="0" data-fit-stock value="${Number(variant.stock) || 0}"></label>
+          <label>Sold<input type="number" min="0" data-fit-sold value="${Number(variant.sold) || 0}" readonly></label>
+        </div>`).join('')}</div>`;
+      const total = fitVariants.reduce((sum, variant) => sum + variant.stock, 0);
+      const status = $('[data-editor-stock-status]', modal);
+      if (status) {
+        status.textContent = `${total > 0 ? (total <= 10 ? 'Low stock' : 'In stock') : 'Sold out'} · ${total} units`;
+        status.className = 'status ' + (total <= 10 ? 'low-stock' : 'in-stock');
+      }
+    };
 
     const paintColors = () => {
       colorRowsHost.innerHTML = colorEntries.map((entry, rowIndex) => `
@@ -452,15 +588,96 @@
             ${sizeRows(entry.sizes, rowIndex)}
           </div>
         </div>`).join('') || '<span class="file-help">No colours added yet.</span>';
+      paintFitStock();
     };
+    if (product && product.fitOptionsEnabled && !fitGroups.length) fitGroups = FIT_OPTION_DEFAULTS.map(group => Object.assign({}, group, { values: group.values.slice() }));
+    paintFitGroups();
     paintColors();
+
+    const fitEnabled = $('[data-fit-enabled]', modal);
+    fitEnabled.addEventListener('change', () => {
+      if (fitEnabled.checked && !fitGroups.length) {
+        fitGroups = FIT_OPTION_DEFAULTS.map(group => Object.assign({}, group, { values: group.values.slice() }));
+        paintFitGroups();
+      }
+      fitEditor.hidden = !fitEnabled.checked;
+      modal.classList.toggle('fit-options-active', fitEnabled.checked);
+      paintFitStock();
+    });
+    if (fitEnabled.checked) modal.classList.add('fit-options-active');
+    fitGroupsHost.addEventListener('input', event => {
+      if (!event.target.matches('[data-fit-label], [data-fit-values]')) return;
+      const row = event.target.closest('[data-fit-group]');
+      if (row && fitGroups[Number(row.dataset.fitGroup)]) {
+        fitGroups[Number(row.dataset.fitGroup)] = {
+          label: $('[data-fit-label]', row).value.trim(),
+          display: $('[data-fit-display]', row).value,
+          values: $('[data-fit-values]', row).value.split(',').map(value => value.trim()).filter(Boolean)
+        };
+      }
+    });
+    fitGroupsHost.addEventListener('change', event => {
+      if (!event.target.matches('[data-fit-label], [data-fit-values], [data-fit-display]')) return;
+      syncFitStockFromInputs();
+      fitGroups = readFitGroups();
+      paintFitStock();
+    });
+    fitGroupsHost.addEventListener('click', event => {
+      const remove = event.target.closest('[data-remove-fit-group]');
+      if (remove) {
+        syncFitStockFromInputs();
+        fitGroups.splice(Number(remove.dataset.removeFitGroup), 1);
+        paintFitGroups();
+        paintFitStock();
+      }
+    });
+    $('[data-add-fit-group]', modal).addEventListener('click', () => {
+      syncFitStockFromInputs();
+      fitGroups = readFitGroups();
+      fitGroups.push({ label: '', display: 'select', values: ['Option 1', 'Option 2'] });
+      paintFitGroups();
+      paintFitStock();
+      const labels = $$('[data-fit-label]', fitGroupsHost);
+      labels[labels.length - 1]?.focus();
+    });
+    fitStockHost.addEventListener('input', event => {
+      if (!event.target.matches('[data-fit-stock]')) return;
+      const total = $$('[data-fit-stock]', fitStockHost).reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+      const status = $('[data-editor-stock-status]', modal);
+      if (status && fitEnabled.checked) {
+        status.textContent = `${total > 0 ? (total <= 10 ? 'Low stock' : 'In stock') : 'Sold out'} · ${total} units`;
+        status.className = 'status ' + (total <= 10 ? 'low-stock' : 'in-stock');
+      }
+    });
+    $('[data-upload-size-chart]', modal).addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async () => {
+        const file = input.files && input.files[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        sizeChart = await readImage(file);
+        chartImage.src = sizeChart;
+        chartImage.hidden = false;
+        $('[data-remove-size-chart]', modal).hidden = false;
+        $('[data-upload-size-chart]', modal).textContent = 'Replace chart';
+      };
+      input.click();
+    });
+    $('[data-remove-size-chart]', modal).addEventListener('click', () => {
+      sizeChart = '';
+      chartImage.removeAttribute('src');
+      chartImage.hidden = true;
+      $('[data-remove-size-chart]', modal).hidden = true;
+      $('[data-upload-size-chart]', modal).textContent = 'Upload chart';
+    });
 
     $('[data-add-color]', modal).addEventListener('click', () => {
       const initialSizes = sizes.map(size => Object.assign({}, size, {
         stock: colorEntries.length ? 0 : Number(size.stock) || 0,
         sold: 0
       }));
-      colorEntries.push({ name: '', images: [], sizes: initialSizes });
+      colorEntries.push({ name: '', committedName: '', images: [], sizes: initialSizes });
       paintColors();
       const inputs = $$('[data-color-name]', colorRowsHost);
       if (inputs.length) inputs[inputs.length - 1].focus();
@@ -474,6 +691,24 @@
       entry.name = event.target.value;
       const title = $('[data-variant-title]', row);
       if (title) title.textContent = 'Sizes & stock · ' + (entry.name || 'Colour ' + (Number(row.dataset.colorRow) + 1));
+    });
+    colorRowsHost.addEventListener('change', event => {
+      if (!event.target.matches('[data-color-name]')) return;
+      syncFitStockFromInputs();
+      const row = event.target.closest('[data-color-row]');
+      const entry = row && colorEntries[Number(row.dataset.colorRow)];
+      if (entry && entry.committedName !== entry.name.trim()) {
+        const previousName = entry.committedName;
+        const nextName = entry.name.trim();
+        fitVariants = fitVariants.map(variant => {
+          if (variant.color !== previousName) return variant;
+          const color = nextName;
+          return Object.assign({}, variant, { color, key: Store.fitVariantKey(color, variant.values) });
+        });
+        entry.committedName = nextName;
+      }
+      fitStockHost.innerHTML = '';
+      paintFitStock();
     });
 
     colorRowsHost.addEventListener('click', event => {
@@ -568,6 +803,30 @@
       if (colorEntries.some(entry => entry.name.trim() && !entry.sizes.length)) { toast('Add at least one size for every colour'); return; }
       const name = $('[data-field="name"]', modal).value.trim();
       if (!name) { toast('Please enter a product name'); return; }
+      syncFitStockFromInputs();
+      colorEntries.forEach(entry => {
+        if (entry.committedName === entry.name.trim()) return;
+        const nextName = entry.name.trim();
+        fitVariants = fitVariants.map(variant => variant.color === entry.committedName
+          ? Object.assign({}, variant, { color: nextName, key: Store.fitVariantKey(nextName, variant.values) })
+          : variant);
+        entry.committedName = nextName;
+      });
+      fitStockHost.innerHTML = '';
+      paintFitStock();
+      fitGroups = readFitGroups();
+      const fitOptionsEnabled = fitEnabled.checked;
+      if (fitOptionsEnabled) {
+        const groupNames = fitGroups.map(group => group.label.toLowerCase());
+        if (!fitGroups.length || fitGroups.some(group => !group.label || !group.values.length || new Set(group.values).size !== group.values.length) || new Set(groupNames).size !== groupNames.length) {
+          toast('Give every enabled option group a unique name and at least one unique choice.');
+          return;
+        }
+        if (fitCombinationCount > 2000) {
+          toast('Reduce the colour/option combinations to 2,000 or fewer before saving.');
+          return;
+        }
+      }
 
       // Collect the colour rows, dropping blanks and merging duplicates.
       const colorImages = {};
@@ -583,6 +842,10 @@
         if (!(colorName in colorVariants)) colorVariants[colorName] = entry.sizes;
       });
       if (!colorOrder.length) { toast('Please add at least one colour with a picture'); return; }
+      if (new Set(colorOrder.map(color => color.toLowerCase())).size !== colorOrder.length) {
+        toast('Each product colour must have a unique name.');
+        return;
+      }
       const colors = colorOrder;
 
       /* Product photos are derived from the colour pictures: the very first
@@ -614,6 +877,7 @@
         id: index,
         name,
         description: $('[data-field="description"]', modal).value.trim(),
+        sku: skuInput.value.trim(),
         category: $('[data-field="category"]', modal).value,
         price: Number($('[data-field="price"]', modal).value) || 0,
         cost: Number($('[data-field="cost"]', modal).value) || 0,
@@ -622,9 +886,14 @@
         colorVariants,
         image,
         gallery: allPictures,
+        sizeChart,
+        splitImageView: $('[data-split-images]', modal).checked,
         colorImages,
         colorMasks: index >= 0 ? Store.state.products[index].colorMasks : {},
-        sizes: legacySizes
+        sizes: legacySizes,
+        fitOptionsEnabled,
+        fitOptionGroups: fitGroups,
+        fitVariants
       };
       const submit = $('button[type="submit"]', modal);
       if (submit) submit.disabled = true;
@@ -703,8 +972,8 @@ function filterOrders(term) {
      the search haystack and the admin sheet saying the same thing. */
   function orderItemSummary(order) {
     return (order.items || []).map(item => {
-      const variant = [item.color || 'Colour not recorded', item.size || 'Size not recorded'].join(' / ');
-      return `${escapeHtml(item.name)} (${escapeHtml(variant)}) × ${item.qty}`;
+      const variant = [item.color || 'Colour not recorded', item.options ? Object.entries(item.options).map(([label, value]) => `${label}: ${value}`).join(' · ') : item.size || 'Size not recorded'].join(' / ');
+      return `${escapeHtml(item.name)}${item.sku ? ' [SKU ' + escapeHtml(item.sku) + ']' : ''} (${escapeHtml(variant)}) × ${item.qty}`;
     }).join(', ') || '—';
   }
 
@@ -783,8 +1052,8 @@ function filterOrders(term) {
         <div class="order-sheet-items">
           ${(order.items || []).map(item => `
             <div class="order-sheet-line">
-              <strong>${escapeHtml(item.name)}</strong>
-              <span>${[item.color || 'Colour not recorded', item.size ? 'Size ' + escapeHtml(item.size) : 'Size not recorded'].map(escapeHtml).join(' · ')}</span>
+              <strong>${escapeHtml(item.name)}${item.sku ? ' · SKU ' + escapeHtml(item.sku) : ''}</strong>
+              <span>${[item.color || 'Colour not recorded', item.options ? Object.entries(item.options).map(([label, value]) => `${label}: ${value}`).join(' · ') : item.size ? 'Size ' + item.size : 'Size not recorded'].map(escapeHtml).join(' · ')}</span>
               <span>${money(item.price)} × ${item.qty}</span>
               <b>${money(item.price * item.qty)}</b>
             </div>`).join('') || '<p class="muted">No items recorded.</p>'}
@@ -1139,7 +1408,7 @@ function filterOrders(term) {
             <img src="${escapeHtml(product.image)}" alt="">
             <span>
               <strong>${escapeHtml(product.name)}</strong>
-              <small>${escapeHtml(Store.categoryName(product.category))} · ${new Set(inventory.map(size => size.label)).size} sizes · ${escapeHtml(product.tag || 'No badge')}</small>
+              <small>${escapeHtml(Store.categoryName(product.category))} · ${new Set(inventory.map(size => size.label)).size} ${product.fitOptionsEnabled ? 'combinations' : 'sizes'}${product.sku ? ' · SKU ' + escapeHtml(product.sku) : ''} · ${escapeHtml(product.tag || 'No badge')}</small>
             </span>
           </div>
           <b class="status ${status.key}">${status.label}</b>
