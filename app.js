@@ -1237,6 +1237,14 @@
             ? (!fitSelectionsComplete() ? 'Select all options' : (stock > 0 ? stock + ' in stock' : 'Out of stock'))
             : (stock > 0 ? label + ' · ' + stock + ' in stock' : label + ' · Out of stock');
         }
+        const canPurchase = fitOptionsEnabled
+          ? Store.totalStock(product) > 0 && (!fitSelectionsComplete() || Boolean(fitVariant && fitVariant.stock > 0))
+          : stock > 0;
+        document.querySelectorAll('.detail-add, .buy-now').forEach(button => {
+          button.disabled = !canPurchase;
+          button.classList.toggle('is-stock-unavailable', !canPurchase);
+          button.setAttribute('aria-disabled', String(!canPurchase));
+        });
         sizeRow?.querySelectorAll('button').forEach(button => {
           button.classList.toggle('selected', button.dataset.size === label);
         });
