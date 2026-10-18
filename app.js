@@ -1111,12 +1111,21 @@
       }
       const mediaLinks = document.createElement('div');
       mediaLinks.className = 'product-detail-links';
-      const chartType = ['set', 'shirt', 'trouser'].includes(product.sizeChartType) ? product.sizeChartType : 'set';
-      const categoryText = `${String(product.category || '')} ${String(product.name || '')}`.toLowerCase();
-      const shirtOnlyCategory = /(shirt|top)/.test(categoryText) && !/(trouser|pant|bottom|set|co-?ord)/.test(categoryText);
-      const trouserOnlyCategory = /(trouser|pant|bottom)/.test(categoryText) && !/(shirt|top|set|co-?ord)/.test(categoryText);
-      const chartKinds = chartType === 'shirt' ? ['shirt'] : chartType === 'trouser' ? ['trouser']
-        : shirtOnlyCategory ? ['shirt'] : trouserOnlyCategory ? ['trouser'] : ['shirt', 'trouser'];
+      const categoryLabel = String(Store.categoryName(product.category) || product.category || '').toLowerCase();
+      const productLabel = String(product.name || '').toLowerCase();
+      const categoryIsSet = /(co[\s-]?ord|suit|pair)/.test(categoryLabel);
+      const categoryIsShirt = /(shirt|top)/.test(categoryLabel);
+      const categoryIsTrouser = /(trouser|pant|bottom)/.test(categoryLabel);
+      const productIsSet = /(co[\s-]?ord|suit|pair)/.test(productLabel);
+      const productIsShirt = /(shirt|top)/.test(productLabel);
+      const productIsTrouser = /(trouser|pant|bottom)/.test(productLabel);
+      /* A recognised category always wins. Product names only classify products
+         assigned to general shelves such as New Arrivals. */
+      const chartKinds = categoryIsSet ? ['shirt', 'trouser']
+        : categoryIsShirt ? ['shirt']
+          : categoryIsTrouser ? ['trouser']
+            : productIsSet ? ['shirt', 'trouser']
+              : productIsShirt ? ['shirt'] : productIsTrouser ? ['trouser'] : ['shirt', 'trouser'];
       const shirtRows = [
         ['XS', '14', '18', '21', '48'], ['S', '14', '19', '22', '48'], ['SM', '14.5', '20', '23', '48'],
         ['M', '15', '21', '24', '48'], ['ML', '15.5', '23', '26', '48'], ['L', '16', '24', '27.5', '48'],
@@ -1133,7 +1142,7 @@
         columns: kind === 'shirt' ? ['Size', 'Shoulder', 'Bust', 'Hip', 'Length'] : ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'],
         rows: kind === 'shirt' ? shirtRows : trouserRows
       }));
-      mediaLinks.innerHTML = `<button type="button" data-open-delivery-policy>Delivery &amp; Returns</button><button type="button" data-open-size-chart>Size chart</button>`;
+      mediaLinks.innerHTML = `<button type="button" data-open-delivery-policy>Delivery &amp; Returns</button><button type="button" data-open-size-chart>Size Chart / Measurements</button>`;
       const sizeLabelAnchor = fitOptionsEnabled ? fitHost : document.querySelector('.size-options');
       if (sizeLabelAnchor) sizeLabelAnchor.insertAdjacentElement('afterend', mediaLinks);
       else document.querySelector('.product-actions')?.insertAdjacentElement('beforebegin', mediaLinks);
@@ -1158,9 +1167,8 @@
         if (!event.target.closest('#detail-image, .product-split-images img')) return;
         imageStage.classList.toggle('is-tap-zoom');
       });
-      /* Typed measurement table saved from the admin panel. Shoppers open it from
-         the same "Size chart" link; the picture chart still opens when only an
-         image was uploaded. */
+      /* Category-selected measurement tables are rendered as HTML; no chart
+         image upload or per-product chart data is required. */
       const sizeChartPanel = document.createElement('div');
       sizeChartPanel.className = 'product-size-chart';
       sizeChartPanel.setAttribute('role', 'dialog');
