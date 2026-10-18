@@ -52,13 +52,10 @@ const PORT = Number(process.env.PORT) || 5173;
    SITE_URL=https://yourdomain.com — otherwise the request host is used. */
 const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const SENDER_EMAIL = process.env.SENDER_EMAIL || 'saadhussain3536@gmail.com';
+const ADMIN_TEST_EMAIL = 'saadhussain3536@gmail.com';
 const OFFICIAL_EMAIL = process.env.OFFICIAL_EMAIL || 'solids.pk.official@gmail.com';
 const OFFICIAL_PHONE = process.env.OFFICIAL_PHONE || '+92 341 2782443';
-const MAIL_FROM = process.env.MAIL_FROM || `Solids <${SENDER_EMAIL}>`;
 const MAIL_REPLY_TO = process.env.MAIL_REPLY_TO || OFFICIAL_EMAIL;
-/* Where the order alert goes. Optional. */
-const STUDIO_EMAIL = process.env.STUDIO_EMAIL || SENDER_EMAIL;
 const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || '';
 const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || 'solids_order_tracking';
@@ -624,50 +621,6 @@ const buildCustomerEmail = (order, req) => {
 
 const escapeAttr = value => escapeHtml(value).replace(/`/g, '&#96;');
 
-/* A short heads-up for the studio: who ordered, what, how much, and a direct
-   link to the order in the admin panel. */
-const buildStudioEmail = (order, req) => {
-  const quote = order.shipping || {};
-  const items = (order.items || []).map(item =>
-    item.name + ' (' + (item.color || 'colour not recorded') +
-    (item.size ? ', size ' + item.size : ', size not recorded') + ') x' + item.qty
-  ).join(', ');
-  const lines = [
-    'New order from the storefront.',
-    '',
-    order.id + '  —  ' + (order.customer || ''),
-    'Tracking ID: ' + order.trackingId,
-    'Email:  ' + (order.email || ''),
-    'Phone:  ' + (order.phone || '—'),
-    'City:   ' + (order.city || '—'),
-    'Payment:' + ' ' + (order.payment || ''),
-    '',
-    'Items:  ' + items,
-    'Total:  ' + money(Number(order.total) || 0),
-    '',
-    'Open in the studio dashboard:',
-    siteUrl('/orders.html', req)
-  ].join('\n');
-
-  const html = [
-    '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#292827">',
-    '<p style="font-size:11px;letter-spacing:2px;color:#8a8378;margin:0 0 4px">SOLIDS — NEW ORDER</p>',
-    '<h1 style="font-size:20px;margin:0 0 16px">' + escapeHtml(order.id) + '</h1>',
-    '<p style="font-size:14px;margin:0 0 4px"><strong>' + escapeHtml(order.customer || '') + '</strong> · ' +
-    escapeHtml(order.city || '') + '</p>',
-    '<p style="font-size:13px;color:#55504a;margin:0 0 4px">' + escapeHtml(order.email || '') +
-    (order.phone ? ' · ' + escapeHtml(order.phone) : '') + '</p>',
-    '<p style="font-size:13px;color:#55504a;margin:0 0 8px">' + escapeHtml(items) + '</p>',
-    '<p style="font-size:13px;margin:0 0 16px"><strong>Tracking ID:</strong> ' + escapeHtml(order.trackingId) + '</p>',
-    '<p style="font-size:16px;margin:0 0 20px"><strong>Total ' + escapeHtml(money(Number(order.total) || 0)) + '</strong></p>',
-    '<p style="margin:0"><a href="' + escapeAttr(siteUrl('/orders.html', req)) +
-    '" style="display:inline-block;background:#292827;color:#fff;padding:12px 20px;text-decoration:none;font-size:12px;letter-spacing:1px">OPEN DASHBOARD</a></p>',
-    '</div>'
-  ].join('');
-
-  return { lines, html };
-};
-
 /* Sends via the Resend HTTP API. No SDK — one HTTPS POST is enough. Returns
    { sent: false } when no key is configured so callers can fall back quietly. */
 const sendMail = async message => {
@@ -679,7 +632,7 @@ const sendMail = async message => {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: MAIL_FROM,
+      from: 'SOLID Store <onboarding@resend.dev>',
       reply_to: MAIL_REPLY_TO,
       to: message.to,
       subject: message.subject,
@@ -856,19 +809,26 @@ const mailTrackingUpdate = async (order, req) => {
   }
 };
 
-/* A copy to the studio so a new order is visible without opening the panel. */
+/* During testing, send the customer confirmation to the admin inbox as well.
+   Skip it when the customer already used that address to avoid a duplicate. */
 const mailStudio = async (order, req) => {
-  if (!STUDIO_EMAIL) return;
+  if (String(order.email || '').trim().toLowerCase() === ADMIN_TEST_EMAIL) return { emailSent: false, reason: 'customer-is-admin' };
+  const mail = buildCustomerEmail(order, req);
   try {
-    const mail = buildStudioEmail(order, req);
+    if (!RESEND_API_KEY) {
+      console.warn('[mail] admin confirmation copy dispatch payload (RESEND_API_KEY missing):', JSON.stringify({ to: ADMIN_TEST_EMAIL, orderId: order.id, trackingId: order.trackingId, items: order.items }));
+      return { emailSent: false, reason: 'no-key' };
+    }
     await sendMail({
-      to: STUDIO_EMAIL,
-      subject: 'New order ' + order.id + ' — ' + order.customer,
+      to: ADMIN_TEST_EMAIL,
+      subject: 'Customer confirmation copy — order ' + order.id + ' · tracking ' + order.trackingId,
       text: mail.lines,
       html: mail.html
     });
+    return { emailSent: true };
   } catch (error) {
-    console.error('[mail] studio alert failed for ' + order.id + ':', error.message);
+    console.error('[mail] admin confirmation copy failed for ' + order.id + ':', error.message);
+    return { emailSent: false, reason: error.message };
   }
 };
 
@@ -1481,7 +1441,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log('Solids storefront at http://localhost:' + PORT);
   if (RESEND_API_KEY) {
-    console.log('  emails: on (Resend, sending as ' + MAIL_FROM + ')');
+    console.log('  emails: on (Resend, sending as SOLID Store <onboarding@resend.dev>)');
   } else {
     console.log('  emails: OFF - set RESEND_API_KEY in .env to send tracking links.');
   }
