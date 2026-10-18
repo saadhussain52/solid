@@ -1174,7 +1174,7 @@
   pointer-events: none
 }
 
-.product-detail-image>#detail-image {
+.product-detail-media-stage>#detail-image {
   display: block;
   width: 100%;
   height: auto;
@@ -1375,7 +1375,7 @@
   }
 
   /* short viewports: give the shot whichever room the page has */
-  .product-detail-image>#detail-image {
+  .product-detail-media-stage>#detail-image {
     max-height: 460px
   }
 }
@@ -1530,7 +1530,7 @@
   }
 
   /* stacked layout: nothing below to clip against, so show it big */
-  .product-detail-image>#detail-image {
+  .product-detail-media-stage>#detail-image {
     max-height: 78vh
   }
 }
@@ -2059,7 +2059,7 @@
   }
 
   /* phones: the shot is near-full-width; let its height follow the column */
-  .product-detail-image>#detail-image {
+  .product-detail-media-stage>#detail-image {
     max-height: none
   }
 

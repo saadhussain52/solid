@@ -102,6 +102,84 @@ const saveOrders = orders => {
 
 let productsCache;
 
+const unifiedFitGroups = [
+  { id: 'set_size', label: 'Set Size', type: 'select', display: 'select', values: ['XS', 'S', 'M', 'L', 'XL'] },
+  { id: 'shirt_length', label: 'Shirt Length', type: 'radio', display: 'radio', values: ['44', '46', '48', '50'] },
+  { id: 'pant_length', label: 'Pant Length', type: 'radio', display: 'radio', values: ['32', '34', '36', '38'] }
+];
+
+const normalizeStoredProductSizing = product => {
+  if (!product || typeof product !== 'object') return product;
+  const oldGroups = Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
+  const oldVariants = Array.isArray(product.fitVariants) ? product.fitVariants : [];
+  const groupIndex = (pattern, fallback) => {
+    const found = oldGroups.findIndex(group => pattern.test(String(group.label || '')));
+    return found >= 0 ? found : fallback;
+  };
+  const sizeIndex = groupIndex(/set\s*size/i, groupIndex(/shirt\s*size/i, groupIndex(/(?:pant|trouser)\s*size/i, 0)));
+  const shirtLengthIndex = groupIndex(/shirt.*length/i, 1);
+  const pantLengthIndex = groupIndex(/(?:pant|trouser).*length/i, 2);
+  const stockByKey = new Map();
+  const addStock = (color, values, stock, sold) => {
+    const key = JSON.stringify([String(color || ''), ...values]);
+    const previous = stockByKey.get(key) || { color: String(color || ''), values, stock: 0, sold: 0 };
+    previous.stock += Math.max(0, Number(stock) || 0);
+    previous.sold += Math.max(0, Number(sold) || 0);
+    stockByKey.set(key, previous);
+  };
+  const cleanLength = value => String(value || '').replace(/\s*\(standard\)\s*/i, '').trim();
+  oldVariants.forEach(variant => {
+    const values = Array.isArray(variant.values) ? variant.values : [];
+    const size = String(values[sizeIndex] || '').trim().toUpperCase();
+    if (!unifiedFitGroups[0].values.includes(size)) return;
+    let shirtLength = cleanLength(values[shirtLengthIndex] || unifiedFitGroups[1].values[0]);
+    let pantLength = cleanLength(values[pantLengthIndex] || unifiedFitGroups[2].values[0]);
+    if (!unifiedFitGroups[1].values.includes(shirtLength)) shirtLength = unifiedFitGroups[1].values[0];
+    if (!unifiedFitGroups[2].values.includes(pantLength)) pantLength = unifiedFitGroups[2].values[0];
+    addStock(variant.color, [size, shirtLength, pantLength], variant.stock, variant.sold);
+  });
+  if (!oldVariants.length) {
+    const colors = Array.isArray(product.colors) && product.colors.length ? product.colors.map(String) : ['Bone'];
+    colors.forEach((color, colorIndex) => {
+      const colorInventory = product.colorVariants && Array.isArray(product.colorVariants[color]) ? product.colorVariants[color] : null;
+      const sizes = colorInventory || (Array.isArray(product.sizes) ? product.sizes : []);
+      sizes.forEach(entry => {
+        const size = String(entry.label || entry.size || '').trim().toUpperCase();
+        if (!unifiedFitGroups[0].values.includes(size)) return;
+        let stock = Math.max(0, Number(entry.stock) || 0);
+        let sold = Math.max(0, Number(entry.sold) || 0);
+        if (!colorInventory) {
+          stock = Math.floor(stock / colors.length) + (colorIndex < stock % colors.length ? 1 : 0);
+          sold = Math.floor(sold / colors.length) + (colorIndex < sold % colors.length ? 1 : 0);
+        }
+        addStock(color, [size, '44', '32'], stock, sold);
+      });
+    });
+  }
+  const colors = Array.isArray(product.colors) && product.colors.length ? product.colors.map(String) : ['Bone'];
+  const variants = [];
+  colors.forEach(color => unifiedFitGroups[0].values.forEach(size => unifiedFitGroups[1].values.forEach(shirtLength => unifiedFitGroups[2].values.forEach(pantLength => {
+    const values = [size, shirtLength, pantLength];
+    const key = JSON.stringify([color, ...values]);
+    const saved = stockByKey.get(key) || {};
+    variants.push({ key, color, values, stock: saved.stock || 0, sold: saved.sold || 0 });
+  }))));
+  if (!oldVariants.length && variants.length) {
+    const stockTotal = variants.reduce((sum, variant) => sum + variant.stock, 0);
+    const soldTotal = variants.reduce((sum, variant) => sum + variant.sold, 0);
+    if (product.stock != null && Number.isFinite(Number(product.stock))) variants[0].stock = Math.max(0, variants[0].stock + Number(product.stock) - stockTotal);
+    if (product.sold != null && Number.isFinite(Number(product.sold))) variants[0].sold = Math.max(0, variants[0].sold + Number(product.sold) - soldTotal);
+  }
+  product.productType = 'set';
+  product.product_type = 'set';
+  product.separateItem = '';
+  product.fitOptionsEnabled = true;
+  product.fitOptionGroups = unifiedFitGroups.map(group => ({ ...group, values: group.values.slice(), options: group.values.slice() }));
+  product.fitVariants = variants;
+  product.fitInventory = {};
+  return product;
+};
+
 const loadProducts = () => {
   if (productsCache !== undefined) return productsCache;
   try {
@@ -111,10 +189,14 @@ const loadProducts = () => {
     if (error.code === 'ENOENT') return null;
     throw error;
   }
+  const before = JSON.stringify(productsCache);
+  productsCache = productsCache.map(normalizeStoredProductSizing);
+  if (JSON.stringify(productsCache) !== before) saveProducts(productsCache);
   return productsCache;
 };
 
 const saveProducts = products => {
+  products = products.map(normalizeStoredProductSizing);
   fs.mkdirSync(dataDir, { recursive: true });
   const temp = productsFile + '.tmp';
   fs.writeFileSync(temp, JSON.stringify(products, null, 2));
@@ -774,6 +856,7 @@ const handleCreate = async (req, res) => {
 
   const products = loadProducts();
   if (products) {
+    const reservedComponentStock = new Map();
     for (const item of items) {
       const product = products.find(candidate => candidate.name === item.name);
       if (!product || !product.fitOptionsEnabled) continue;
@@ -783,11 +866,27 @@ const handleCreate = async (req, res) => {
       if (!groups.length || values.some(value => !value)) {
         return json(res, 400, { ok: false, error: 'Choose every required product option before ordering.' });
       }
-      const variantKey = JSON.stringify([String(item.color || '')].concat(values));
-      const variant = (product.fitVariants || []).find(entry => entry.key === variantKey);
       const quantity = Math.max(1, Number(item.qty) || 1);
-      if (!variant) return json(res, 400, { ok: false, error: 'That product option combination is not available.' });
-      if ((Number(variant.stock) || 0) < quantity) return json(res, 409, { ok: false, error: 'That product option combination is out of stock.' });
+      const inventory = product.fitInventory && product.fitInventory[String(item.color || '')];
+      if (inventory) {
+        for (let index = 0; index < groups.length; index += 1) {
+          const group = groups[index];
+          const entry = (inventory[group.label] || []).find(candidate =>
+            String(candidate.label).toLowerCase() === values[index].toLowerCase());
+          if (!entry) return json(res, 400, { ok: false, error: 'That product size is not available.' });
+          const reservationKey = [product.name, item.color || '', group.label, values[index]].join('\u0000');
+          const reserved = reservedComponentStock.get(reservationKey) || 0;
+          if ((Number(entry.stock) || 0) - reserved < quantity) {
+            return json(res, 409, { ok: false, error: 'That product size is out of stock.' });
+          }
+          reservedComponentStock.set(reservationKey, reserved + quantity);
+        }
+      } else {
+        const variantKey = JSON.stringify([String(item.color || '')].concat(values));
+        const variant = (product.fitVariants || []).find(entry => entry.key === variantKey);
+        if (!variant) return json(res, 400, { ok: false, error: 'That product option combination is not available.' });
+        if ((Number(variant.stock) || 0) < quantity) return json(res, 409, { ok: false, error: 'That product option combination is out of stock.' });
+      }
     }
   }
 
@@ -819,6 +918,22 @@ const handleCreate = async (req, res) => {
         if (!product) return;
         if (product.fitOptionsEnabled && Array.isArray(product.fitOptionGroups) && Array.isArray(product.fitVariants)) {
           const options = item.options && typeof item.options === 'object' ? item.options : {};
+          const inventory = product.fitInventory && product.fitInventory[String(item.color || '')];
+          if (inventory) {
+            const quantity = Math.max(0, Number(item.qty) || 1);
+            product.fitOptionGroups.forEach(group => {
+              const selected = String(options[group.label] || '');
+              const entry = (inventory[group.label] || []).find(candidate =>
+                String(candidate.label).toLowerCase() === selected.toLowerCase());
+              if (!entry) return;
+              entry.stock = Math.max(0, (Number(entry.stock) || 0) - quantity);
+              entry.sold = (Number(entry.sold) || 0) + quantity;
+            });
+            const firstGroup = product.fitOptionGroups[0];
+            product.sold = Object.keys(product.fitInventory).reduce((sum, color) =>
+              sum + (product.fitInventory[color][firstGroup.label] || []).reduce((groupSum, entry) => groupSum + (Number(entry.sold) || 0), 0), 0);
+            return;
+          }
           const variantKey = JSON.stringify([String(item.color || '')].concat(product.fitOptionGroups.map(group => String(options[group.label] || ''))));
           const fitVariant = product.fitVariants.find(variant => variant.key === variantKey);
           if (fitVariant) {

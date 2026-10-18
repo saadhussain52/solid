@@ -205,7 +205,7 @@
         const index = Store.state.products.indexOf(product);
         const status = Store.productStatus(product);
         const units = Store.totalStock(product);
-        const low = units > 0 && units <= 10;
+        const low = units > 0 && units <= 5;
         return `<article class="product-card${status.key === 'sold-out' ? ' is-sold-out' : ''}">
           <div class="product-image">
             <a class="product-link" href="product.html?product=${index}" aria-label="View ${escapeHtml(product.name)}">
@@ -213,10 +213,10 @@
             </a>
             ${wishlistButton(index)}
             ${product.tag ? `<span class="product-badge">${escapeHtml(product.tag)}</span>` : ''}
-            ${status.key === 'sold-out' ? '<span class="sold-out-flag">Sold out</span>' : ''}
+            ${status.key === 'sold-out' ? '<span class="sold-out-flag">Sold Out</span>' : ''}
             ${low ? `<span class="low-stock-flag">Only ${units} left</span>` : ''}
             <button class="quick-add" data-product="${index}"${status.key === 'sold-out' ? ' disabled' : ''}>
-              ${status.key === 'sold-out' ? 'Sold out' : 'Add to bag <span>+</span>'}
+              ${status.key === 'sold-out' ? 'SOLD OUT' : 'Add to bag <span>+</span>'}
             </button>
           </div>
           <div class="product-details">
@@ -254,6 +254,7 @@
   function addToCart(item) {
     const product = Store.state.products[item.productIndex];
     if (!product) return;
+    const requestedQuantity = Math.max(1, Math.floor(Number(item.quantity) || 1));
     if (product.fitOptionsEnabled) {
       if (!Store.fitVariantFor(product, item.color, item.options)) {
         notify('Choose every required option before adding this product');
@@ -272,9 +273,12 @@
     const available = product.fitOptionsEnabled
       ? Store.fitVariantFor(product, item.color, item.options).stock
       : (item.size ? Store.stockFor(product, item.size, item.color) : Store.totalStock(product));
-    if (inBag >= available) { notify(`Only ${available} left in ${item.color ? item.color + ' ' : ''}${item.size || product.name}`); return; }
-    if (existing) existing.quantity += 1;
-    else cart.push({ productIndex: item.productIndex, size: item.size || '', color: item.color || '', options: item.options || {}, quantity: 1 });
+    if (inBag + requestedQuantity > available) {
+      notify(`Only ${Math.max(0, available - inBag)} more available in ${item.color ? item.color + ' ' : ''}${item.size || product.name}`);
+      return;
+    }
+    if (existing) existing.quantity += requestedQuantity;
+    else cart.push({ productIndex: item.productIndex, size: item.size || '', color: item.color || '', options: item.options || {}, quantity: requestedQuantity });
     saveCart();
     updateCart();
     openDrawer('cart-drawer');
@@ -985,8 +989,13 @@
     const product = Store.state.products[index] || Store.state.products[0];
     if (product) {
       const quantityEl = document.querySelector('#quantity-value');
+      const selectedQuantity = () => Math.max(1, parseInt(quantityEl?.value ?? quantityEl?.textContent, 10) || 1);
       const gallery = document.querySelector('#detail-gallery');
       const detailPrice = document.querySelector('#detail-price');
+      const inventoryBadge = document.createElement('span');
+      inventoryBadge.className = 'product-inventory-badge';
+      inventoryBadge.hidden = true;
+      inventoryBadge.setAttribute('aria-live', 'polite');
       let comparePrice = document.querySelector('#detail-compare-price');
       if (!comparePrice && detailPrice) {
         comparePrice = document.createElement('del');
@@ -1017,11 +1026,19 @@
         const firstAvailable = sizes.find(size => size.stock > 0) || sizes[0];
         return active ? active.dataset.size : (firstAvailable ? firstAvailable.label : '');
       };
+      const selectedColor = () => {
+        const active = document.querySelector('#color-options .color-swatch.selected');
+        return active ? active.dataset.color : ((product.colors || [])[0] || Object.keys(product.colorVariants || {})[0] || '');
+      };
       const fitOptionGroups = product.fitOptionsEnabled && Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
       const fitOptionsEnabled = product.fitOptionsEnabled && fitOptionGroups.length > 0;
+      const productMode = (product.product_type || product.productType) === 'separate' ? 'separate' : 'set';
+      const separateItem = product.separateItem === 'pant' ? 'pant' : 'shirt';
       const fitSelections = {};
       const fitHost = document.createElement('div');
       fitHost.className = 'fit-options-customer';
+      fitHost.dataset.productType = productMode;
+      fitHost.setAttribute('aria-label', productMode === 'separate' ? `Choose ${separateItem} options` : 'Choose set options');
       if (fitOptionsEnabled && sizeRow) {
         const sizeLabel = sizeRow.previousElementSibling;
         if (sizeLabel) sizeLabel.hidden = true;
@@ -1029,27 +1046,59 @@
         sizeRow.insertAdjacentElement('afterend', fitHost);
         fitHost.innerHTML = fitOptionGroups.map((group, groupIndex) => {
           if (group.display === 'radio') {
-            return `<fieldset class="fit-option-choice"><legend>${escapeHtml(group.label)} <span aria-hidden="true">*</span></legend><div>${group.values.map((value, valueIndex) =>
-              `<label><input type="radio" name="fit-option-${groupIndex}" value="${escapeAttr(value)}"><span>${escapeHtml(value)}</span></label>`
-            ).join('')}</div></fieldset>`;
+            return `<fieldset class="fit-option-choice"><legend>${escapeHtml(group.label)} <span aria-hidden="true">*</span></legend><div>${group.values.map((value, valueIndex) => {
+              const out = Store.fitValueStock(product, selectedColor(), fitSelections, group.label, value) <= 0;
+              return `<label class="${out ? 'is-unavailable' : ''}" title="${out ? 'Out of stock' : ''}"><input type="radio" name="fit-option-${groupIndex}" value="${escapeAttr(value)}"${out ? ' disabled' : ''}><span>${escapeHtml(value)}</span></label>`;
+            }).join('')}</div></fieldset>`;
           }
-          return `<label class="fit-option-select">${escapeHtml(group.label)} <span aria-hidden="true">*</span><select data-fit-option="${escapeAttr(group.label)}"><option value="">Choose one</option>${group.values.map(value =>
-            `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`
-          ).join('')}</select></label>`;
+          return `<label class="fit-option-select">${escapeHtml(group.label)} <span aria-hidden="true">*</span><select data-fit-option="${escapeAttr(group.label)}"><option value="">Choose one</option>${group.values.map(value => {
+            const out = Store.fitValueStock(product, selectedColor(), fitSelections, group.label, value) <= 0;
+            return `<option value="${escapeAttr(value)}"${out ? ' disabled' : ''}>${escapeHtml(value)}${out ? ' — out of stock' : ''}</option>`;
+          }).join('')}</select></label>`;
         }).join('');
         fitOptionGroups.forEach((group, groupIndex) => {
           fitHost.querySelectorAll(`[name="fit-option-${groupIndex}"]`).forEach(input => input.addEventListener('change', () => {
             fitSelections[group.label] = input.value;
+            refreshFitAvailability();
             update();
           }));
         });
         fitHost.querySelectorAll('[data-fit-option]').forEach(select => select.addEventListener('change', () => {
           fitSelections[select.dataset.fitOption] = select.value;
+          refreshFitAvailability();
           update();
         }));
       }
       const fitSelectionsComplete = () => fitOptionsEnabled && fitOptionGroups.every(group => fitSelections[group.label]);
       const selectedFitVariant = () => Store.fitVariantFor(product, selectedColor(), fitSelections);
+      /* Grey out any option value whose remaining combinations all sit at zero
+         stock, so a shopper never picks a combination we cannot ship. */
+      const refreshFitAvailability = () => {
+        if (!fitOptionsEnabled) return;
+        const color = selectedColor();
+        fitOptionGroups.forEach((group, groupIndex) => {
+          fitHost.querySelectorAll(`[name="fit-option-${groupIndex}"]`).forEach(input => {
+            const out = Store.fitValueStock(product, color, fitSelections, group.label, input.value) <= 0;
+            input.disabled = out;
+            input.closest('label')?.classList.toggle('is-unavailable', out);
+            if (out && input.checked) input.checked = false;
+          });
+          const select = fitHost.querySelector(`[data-fit-option="${CSS.escape(group.label)}"]`);
+          if (select) {
+            select.querySelectorAll('option').forEach(option => {
+              if (!option.value) return;
+              const out = Store.fitValueStock(product, color, fitSelections, group.label, option.value) <= 0;
+              option.disabled = out;
+              option.textContent = option.value + (out ? ' — out of stock' : '');
+            });
+            if (select.value && Store.fitValueStock(product, color, fitSelections, group.label, select.value) <= 0) {
+              delete fitSelections[group.label];
+              select.value = '';
+            }
+          }
+        });
+      };
+      refreshFitAvailability();
 
       const skuLine = document.createElement('span');
       skuLine.className = 'detail-sku';
@@ -1062,7 +1111,11 @@
       }
       const mediaLinks = document.createElement('div');
       mediaLinks.className = 'product-detail-links';
-      const sizeChartButton = product.sizeChart
+      const chartTable = product.sizeChartTable && Array.isArray(product.sizeChartTable.columns) && product.sizeChartTable.columns.length > 1
+        && Array.isArray(product.sizeChartTable.rows) && product.sizeChartTable.rows.length
+        ? product.sizeChartTable
+        : null;
+      const sizeChartButton = (product.sizeChart || chartTable)
         ? `<button type="button" data-open-size-chart>Size chart</button>`
         : '';
       mediaLinks.innerHTML = `${sizeChartButton}<a href="shipping.html">Delivery &amp; Returns</a>`;
@@ -1071,56 +1124,67 @@
       const splitImageHost = document.createElement('div');
       splitImageHost.className = 'product-split-images';
       splitImageHost.hidden = true;
-      detailImage.insertAdjacentElement('afterend', splitImageHost);
-      const zoomViewer = document.createElement('div');
-      zoomViewer.className = 'product-image-zoom';
-      zoomViewer.setAttribute('role', 'dialog');
-      zoomViewer.setAttribute('aria-modal', 'true');
-      zoomViewer.setAttribute('aria-label', 'Product image zoom');
-      zoomViewer.hidden = true;
-      zoomViewer.innerHTML = '<button type="button" class="product-image-zoom-close" aria-label="Close image zoom">×</button><img alt="">';
-      document.body.appendChild(zoomViewer);
-      const zoomImage = zoomViewer.querySelector('img');
-      let zoomScale = 1;
-      const openZoom = (source, alt) => {
-        if (!source) return;
-        zoomImage.src = source;
-        zoomImage.alt = alt || product.name;
-        zoomScale = 1;
-        zoomImage.style.transform = 'scale(1)';
-        zoomViewer.hidden = false;
-        document.body.classList.add('image-zoom-open');
-        zoomViewer.querySelector('.product-image-zoom-close').focus();
-      };
-      const closeZoom = () => {
-        zoomViewer.hidden = true;
-        zoomImage.removeAttribute('src');
-        zoomScale = 1;
-        zoomImage.style.transform = 'scale(1)';
-        document.body.classList.remove('image-zoom-open');
-      };
-      zoomViewer.querySelector('.product-image-zoom-close').addEventListener('click', closeZoom);
-      zoomViewer.addEventListener('click', event => { if (event.target === zoomViewer) closeZoom(); });
-      zoomImage.addEventListener('click', () => {
-        zoomScale = zoomScale === 1 ? 2 : 1;
-        zoomImage.style.transform = `scale(${zoomScale})`;
+      const imageStage = document.createElement('div');
+      imageStage.className = 'product-detail-media-stage';
+      detailImage.before(imageStage);
+      imageStage.append(detailImage, splitImageHost);
+      imageStage.appendChild(inventoryBadge);
+      imageStage.addEventListener('pointermove', event => {
+        const image = event.target.closest('#detail-image, .product-split-images img');
+        if (!image || event.pointerType !== 'mouse') return;
+        const rect = image.getBoundingClientRect();
+        imageStage.style.setProperty('--zoom-x', `${((event.clientX - rect.left) / rect.width) * 100}%`);
+        imageStage.style.setProperty('--zoom-y', `${((event.clientY - rect.top) / rect.height) * 100}%`);
+        imageStage.classList.add('is-hover-zoom');
       });
-      zoomViewer.addEventListener('wheel', event => {
-        if (zoomViewer.hidden) return;
-        event.preventDefault();
-        zoomScale = Math.max(1, Math.min(4, zoomScale + (event.deltaY < 0 ? 0.25 : -0.25)));
-        zoomImage.style.transform = `scale(${zoomScale})`;
-      }, { passive: false });
-      document.addEventListener('keydown', event => { if (event.key === 'Escape' && !zoomViewer.hidden) closeZoom(); });
-      detailImage.addEventListener('click', () => openZoom(detailImage.src, detailImage.alt));
-      const zoomButton = document.createElement('button');
-      zoomButton.type = 'button';
-      zoomButton.className = 'image-zoom-trigger';
-      zoomButton.setAttribute('aria-label', 'Zoom product image');
-      zoomButton.textContent = '+';
-      zoomButton.addEventListener('click', () => openZoom(currentZoomSource, detailImage.alt));
-      document.querySelector('.product-detail-image')?.appendChild(zoomButton);
-      mediaLinks.querySelector('[data-open-size-chart]')?.addEventListener('click', () => openZoom(product.sizeChart, product.name + ' size chart'));
+      imageStage.addEventListener('pointerleave', () => imageStage.classList.remove('is-hover-zoom'));
+      imageStage.addEventListener('click', event => {
+        if (!event.target.closest('#detail-image, .product-split-images img')) return;
+        imageStage.classList.toggle('is-tap-zoom');
+      });
+      /* Typed measurement table saved from the admin panel. Shoppers open it from
+         the same "Size chart" link; the picture chart still opens when only an
+         image was uploaded. */
+      const sizeChartPanel = document.createElement('div');
+      sizeChartPanel.className = 'product-size-chart';
+      sizeChartPanel.setAttribute('role', 'dialog');
+      sizeChartPanel.setAttribute('aria-modal', 'true');
+      sizeChartPanel.setAttribute('aria-label', product.name + ' size chart');
+      sizeChartPanel.hidden = true;
+      if (chartTable && !product.sizeChart) {
+        const head = chartTable.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('');
+        const body = chartTable.rows.map(row => {
+          const cells = chartTable.columns.slice(1).map((_, index) => `<td>${escapeHtml(row.values[index] || '—')}</td>`).join('');
+          return `<tr><th scope="row">${escapeHtml(row.size)}</th>${cells}</tr>`;
+        }).join('');
+        sizeChartPanel.innerHTML = '<div class="product-size-chart-inner">'
+          + '<button type="button" class="product-size-chart-close" data-close-size-chart aria-label="Close size chart">×</button>'
+          + '<h3>Size chart</h3>'
+          + `<table class="size-chart-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
+          + '</div>';
+      } else if (product.sizeChart) {
+        sizeChartPanel.innerHTML = '<div class="product-size-chart-inner">'
+          + '<button type="button" class="product-size-chart-close" data-close-size-chart aria-label="Close size chart">×</button>'
+          + '<h3>Size chart</h3>'
+          + `<img class="product-size-chart-image" src="${escapeAttr(product.sizeChart)}" alt="${escapeAttr(product.name)} size chart">`
+          + '</div>';
+      }
+      const openSizeChart = () => {
+        sizeChartPanel.hidden = false;
+        document.body.classList.add('size-chart-open');
+        sizeChartPanel.querySelector('[data-close-size-chart]').focus();
+      };
+      const closeSizeChart = () => {
+        sizeChartPanel.hidden = true;
+        document.body.classList.remove('size-chart-open');
+      };
+      if (chartTable || product.sizeChart) {
+        document.body.appendChild(sizeChartPanel);
+        sizeChartPanel.querySelector('[data-close-size-chart]').addEventListener('click', closeSizeChart);
+        sizeChartPanel.addEventListener('click', event => { if (event.target === sizeChartPanel) closeSizeChart(); });
+        document.addEventListener('keydown', event => { if (event.key === 'Escape' && !sizeChartPanel.hidden) closeSizeChart(); });
+      }
+      mediaLinks.querySelector('[data-open-size-chart]')?.addEventListener('click', openSizeChart);
 
       /* Colour pictures uploaded from the admin panel, keyed by colour name.
          A colour may hold a single picture or a list of pictures. */
@@ -1183,11 +1247,6 @@
           return `<button type="button" class="color-swatch${hasPictures ? ' has-image' : ''}${position === 0 ? ' selected' : ''}" data-color="${escapeAttr(color)}" title="${escapeAttr(color)}${hasPictures ? ' — ' + count + ' picture' + (count > 1 ? 's' : '') : ''}" aria-label="${escapeAttr(color)}" style="--swatch:${hexFor(color)}${picture ? `;--swatch-image:url('${escapeAttr(picture)}')` : ''}"></button>`;
         }).join('');
       }
-      const selectedColor = () => {
-        const active = colorRow && colorRow.querySelector('.color-swatch.selected');
-        if (active) return active.dataset.color;
-        return colors[0] || '';
-      };
       const paintColors = () => {
         const chosen = selectedColor();
         if (colorLabel) colorLabel.textContent = chosen || '—';
@@ -1203,6 +1262,7 @@
           button.classList.add('selected');
           paintColors();
           renderSizeOptions(button.dataset.color);
+          refreshFitAvailability();
           update();
           /* Swap the product picture(s) to the chosen colour's own images. */
           galleryIndex = 0;
@@ -1218,6 +1278,19 @@
         const fitVariant = fitOptionsEnabled ? selectedFitVariant() : null;
         const price = fitOptionsEnabled ? numOr(product.price) : Store.priceFor(product, label, color);
         const stock = fitOptionsEnabled ? (fitVariant ? fitVariant.stock : 0) : Store.stockFor(product, label, color);
+        const badgeStock = fitOptionsEnabled && !fitSelectionsComplete() ? Store.totalStock(product) : stock;
+        if (badgeStock === 0) {
+          inventoryBadge.textContent = 'Sold Out';
+          inventoryBadge.classList.add('is-sold-out');
+          inventoryBadge.hidden = false;
+        } else if (badgeStock > 0 && badgeStock <= 5) {
+          inventoryBadge.textContent = `Only ${badgeStock} left`;
+          inventoryBadge.classList.remove('is-sold-out');
+          inventoryBadge.hidden = false;
+        } else {
+          inventoryBadge.hidden = true;
+          inventoryBadge.classList.remove('is-sold-out');
+        }
         const compare = fitOptionsEnabled ? 0 : Store.compareAtPriceFor(product, label, color);
         if (detailPrice) {
           detailPrice.textContent = money(price);
@@ -1245,13 +1318,15 @@
           button.classList.toggle('is-stock-unavailable', !canPurchase);
           button.setAttribute('aria-disabled', String(!canPurchase));
         });
+        const addButton = document.querySelector('.detail-add');
+        if (addButton) addButton.innerHTML = badgeStock === 0 ? 'SOLD OUT' : 'ADD TO BAG <span>&#8599;</span>';
         sizeRow?.querySelectorAll('button').forEach(button => {
           button.classList.toggle('selected', button.dataset.size === label);
         });
       };
 
-      let currentZoomSource = product.image;
       const paintImage = () => {
+        imageStage.classList.remove('is-hover-zoom', 'is-tap-zoom');
         const active = colorRow && colorRow.querySelector('.color-swatch.selected');
         const chosen = active ? active.dataset.color : '';
         const colorPictures = picturesForColor(chosen);
@@ -1270,16 +1345,11 @@
         splitImageHost.hidden = !splitView;
         detailImage.alt = chosen ? product.name + ' in ' + chosen : product.name;
         if (splitView) {
-          currentZoomSource = shownImages[0];
           splitImageHost.classList.toggle('is-single', shownImages.length === 1);
           splitImageHost.innerHTML = shownImages.map((source, position) =>
-            `<button type="button" data-zoom-image="${escapeAttr(source)}" aria-label="Zoom ${escapeAttr(product.name)} image ${position + 1}"><img src="${escapeAttr(source)}" alt="${escapeAttr(product.name)} view ${galleryIndex * 2 + position + 1}"></button>`).join('');
-          splitImageHost.querySelectorAll('[data-zoom-image]').forEach(button => button.addEventListener('click', () => {
-            openZoom(button.dataset.zoomImage, product.name + (chosen ? ' in ' + chosen : ''));
-          }));
+            `<img src="${escapeAttr(source)}" alt="${escapeAttr(product.name)} view ${galleryIndex * 2 + position + 1}">`).join('');
         } else {
           detailImage.src = shownImages[0] || product.image;
-          currentZoomSource = detailImage.src;
         }
         if (gallery) {
           gallery.innerHTML = galleryGroups.map((images, position) =>
@@ -1329,8 +1399,9 @@
 
       document.querySelector('#plus')?.addEventListener('click', () => {
         const label = selectedSize();
-        const ceiling = Store.stockFor(product, label, selectedColor());
-        if (Number(quantityEl.textContent) >= ceiling) { notify('Only ' + ceiling + ' available in ' + label); return; }
+        const fitVariant = fitOptionsEnabled ? selectedFitVariant() : null;
+        const ceiling = fitOptionsEnabled ? (fitVariant ? fitVariant.stock : 0) : Store.stockFor(product, label, selectedColor());
+        if (Number(quantityEl.textContent) >= ceiling) { notify('Only ' + ceiling + ' available in ' + (fitOptionsEnabled ? optionSummary(fitSelections) : label)); return; }
         quantityEl.textContent = Number(quantityEl.textContent) + 1;
         update();
       });
@@ -1340,6 +1411,7 @@
       });
 
       document.querySelector('.detail-add')?.addEventListener('click', () => {
+        const quantity = selectedQuantity();
         if (fitOptionsEnabled) {
           const missing = fitOptionGroups.find(group => !fitSelections[group.label]);
           if (missing) {
@@ -1350,26 +1422,27 @@
           }
           const variant = selectedFitVariant();
           if (!variant || variant.stock <= 0) { notify('That colour and option combination is out of stock'); return; }
-          addToCart({ productIndex: index, color: selectedColor(), options: Object.assign({}, fitSelections), quantity: 1 });
+          addToCart({ productIndex: index, color: selectedColor(), options: Object.assign({}, fitSelections), quantity });
           return;
         }
         const label = selectedSize();
         if (Store.stockFor(product, label, selectedColor()) <= 0) { notify(selectedColor() + ' / ' + label + ' is out of stock'); return; }
-        addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });
+        addToCart({ productIndex: index, size: label, color: selectedColor(), quantity });
       });
       document.querySelector('.buy-now')?.addEventListener('click', () => {
+        const quantity = selectedQuantity();
         if (fitOptionsEnabled) {
           const missing = fitOptionGroups.find(group => !fitSelections[group.label]);
           if (missing) { notify('Please choose ' + missing.label); return; }
           const variant = selectedFitVariant();
           if (!variant || variant.stock <= 0) { notify('That colour and option combination is out of stock'); return; }
-          addToCart({ productIndex: index, color: selectedColor(), options: Object.assign({}, fitSelections), quantity: 1 });
+          addToCart({ productIndex: index, color: selectedColor(), options: Object.assign({}, fitSelections), quantity });
           window.setTimeout(openCheckout, 350);
           return;
         }
         const label = selectedSize();
         if (Store.stockFor(product, label, selectedColor()) <= 0) { notify(selectedColor() + ' / ' + label + ' is out of stock'); return; }
-        addToCart({ productIndex: index, size: label, color: selectedColor(), quantity: 1 });
+        addToCart({ productIndex: index, size: label, color: selectedColor(), quantity });
         window.setTimeout(openCheckout, 350);
       });
       update();
@@ -1404,7 +1477,7 @@
           relatedGrid.innerHTML = pool.map(({ item, position }) => {
             const status = Store.productStatus(item);
             const units = Store.totalStock(item);
-            const low = units > 0 && units <= 10;
+            const low = units > 0 && units <= 5;
             return `<article class="product-card${status.key === 'sold-out' ? ' is-sold-out' : ''}">
               <div class="product-image">
                 <a class="product-link" href="product.html?product=${position}" aria-label="View ${escapeHtml(item.name)}">
@@ -1412,10 +1485,10 @@
                 </a>
                 ${wishlistButton(position)}
                 ${item.tag ? `<span class="product-badge">${escapeHtml(item.tag)}</span>` : ''}
-                ${status.key === 'sold-out' ? '<span class="sold-out-flag">Sold out</span>' : ''}
+                ${status.key === 'sold-out' ? '<span class="sold-out-flag">Sold Out</span>' : ''}
                 ${low ? `<span class="low-stock-flag">Only ${units} left</span>` : ''}
                 <button class="quick-add" data-product="${position}"${status.key === 'sold-out' ? ' disabled' : ''}>
-                  ${status.key === 'sold-out' ? 'Sold out' : 'Add to bag <span>+</span>'}
+                  ${status.key === 'sold-out' ? 'SOLD OUT' : 'Add to bag <span>+</span>'}
                 </button>
               </div>
               <div class="product-details">

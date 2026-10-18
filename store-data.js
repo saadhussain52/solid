@@ -30,6 +30,11 @@
 
   var DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
   var DEFAULT_COLORS = ['Bone', 'Black', 'Olive'];
+  var UNIFIED_FIT_GROUPS = [
+    { id: 'set_size', label: 'Set Size', type: 'select', display: 'select', values: ['XS', 'S', 'M', 'L', 'XL'] },
+    { id: 'shirt_length', label: 'Shirt Length', type: 'radio', display: 'radio', values: ['44', '46', '48', '50'] },
+    { id: 'pant_length', label: 'Pant Length', type: 'radio', display: 'radio', values: ['32', '34', '36', '38'] }
+  ];
 
   /* --------------------------------------------------- shipping & payments */
 
@@ -371,17 +376,35 @@
     base.colorImages = base.colorImages && typeof base.colorImages === 'object' && !Array.isArray(base.colorImages) ? base.colorImages : {};
     base.colorMasks = base.colorMasks && typeof base.colorMasks === 'object' && !Array.isArray(base.colorMasks) ? base.colorMasks : {};
     base.sku = String(base.sku || '').trim();
+    base.productType = 'set';
+    base.product_type = 'set';
+    base.separateItem = '';
     base.sizeChart = typeof base.sizeChart === 'string' ? base.sizeChart : '';
-    base.splitImageView = Boolean(base.splitImageView);
-    base.fitOptionsEnabled = Boolean(base.fitOptionsEnabled);
-    base.fitOptionGroups = Array.isArray(base.fitOptionGroups) ? base.fitOptionGroups.map(function (group) {
+    /* Typed size chart: columns are measurement points, rows are sizes. The first
+       column is always the size label, so values map to columns[1..]. */
+    var rawChart = base.sizeChartTable && typeof base.sizeChartTable === 'object' ? base.sizeChartTable : {};
+    var chartColumns = Array.isArray(rawChart.columns) ? rawChart.columns.map(function (column) { return String(column == null ? '' : column).trim(); }) : [];
+    if (chartColumns.length && chartColumns[0].toLowerCase() !== 'size') chartColumns.unshift('Size');
+    var chartRows = Array.isArray(rawChart.rows) ? rawChart.rows.map(function (row) {
       return {
+        size: row && row.size != null ? String(row.size).trim() : '',
+        values: row && Array.isArray(row.values) ? row.values.map(function (value) { return value == null ? '' : String(value).trim(); }) : []
+      };
+    }).filter(function (row) { return row.size || row.values.some(Boolean); }) : [];
+    base.sizeChartTable = (chartColumns.length > 1 && chartRows.length) ? { columns: chartColumns, rows: chartRows } : { columns: [], rows: [] };
+    base.splitImageView = Boolean(base.splitImageView);
+    var oldFitGroups = Array.isArray(base.fitOptionGroups) ? base.fitOptionGroups.map(function (group) {
+      var values = Array.isArray(group && (group.values || group.options)) ? (group.values || group.options).map(function (value) { return String(value).trim(); }).filter(Boolean) : [];
+      return {
+        id: String(group && group.id || '').trim(),
         label: String(group && group.label || '').trim(),
-        display: group && group.display === 'radio' ? 'radio' : 'select',
-        values: Array.isArray(group && group.values) ? group.values.map(function (value) { return String(value).trim(); }).filter(Boolean) : []
+        type: group && (group.type === 'radio' || group.display === 'radio') ? 'radio' : 'select',
+        display: group && (group.type === 'radio' || group.display === 'radio') ? 'radio' : 'select',
+        options: values,
+        values: values
       };
     }).filter(function (group) { return group.label && group.values.length; }) : [];
-    base.fitVariants = Array.isArray(base.fitVariants) ? base.fitVariants.map(function (variant) {
+    var oldFitVariants = Array.isArray(base.fitVariants) ? base.fitVariants.map(function (variant) {
       var values = Array.isArray(variant && variant.values) ? variant.values.map(String) : [];
       return {
         key: String(variant && variant.key || fitVariantKey(variant && variant.color, values)),
@@ -391,6 +414,77 @@
         sold: Math.max(0, num(variant && variant.sold))
       };
     }) : [];
+    var canonicalValues = UNIFIED_FIT_GROUPS.map(function (group) { return group.values; });
+    var groupIndex = function (pattern, fallback) {
+      var index = oldFitGroups.findIndex(function (group) { return pattern.test(group.label); });
+      return index >= 0 ? index : fallback;
+    };
+    var sizeIndex = groupIndex(/set\s*size/i, groupIndex(/shirt\s*size/i, groupIndex(/(?:pant|trouser)\s*size/i, 0)));
+    var shirtLengthIndex = groupIndex(/shirt.*length/i, 1);
+    var pantLengthIndex = groupIndex(/(?:pant|trouser).*length/i, 2);
+    var normalizeLength = function (value) { return String(value || '').replace(/\s*\(standard\)\s*/i, '').trim(); };
+    var legacyFitStock = new Map();
+    oldFitVariants.forEach(function (variant) {
+      var values = variant.values || [];
+      var size = String(values[sizeIndex] || '').trim().toUpperCase();
+      if (canonicalValues[0].indexOf(size) < 0) return;
+      var shirtLength = normalizeLength(values[shirtLengthIndex] || canonicalValues[1][0]);
+      var pantLength = normalizeLength(values[pantLengthIndex] || canonicalValues[2][0]);
+      if (canonicalValues[1].indexOf(shirtLength) < 0) shirtLength = canonicalValues[1][0];
+      if (canonicalValues[2].indexOf(pantLength) < 0) pantLength = canonicalValues[2][0];
+      var key = fitVariantKey(variant.color, [size, shirtLength, pantLength]);
+      var current = legacyFitStock.get(key) || { color: variant.color, values: [size, shirtLength, pantLength], stock: 0, sold: 0 };
+      current.stock += variant.stock;
+      current.sold += variant.sold;
+      legacyFitStock.set(key, current);
+    });
+    if (!oldFitVariants.length) {
+      var colorsForMigration = (Array.isArray(base.colors) && base.colors.length ? base.colors : DEFAULT_COLORS).map(String);
+      var divisor = Math.max(1, colorsForMigration.length);
+      colorsForMigration.forEach(function (color, colorIndex) {
+        var source = Array.isArray(base.colorVariants[color]) ? base.colorVariants[color] : base.sizes;
+        source.forEach(function (entry) {
+          var size = String(entry.label || '').trim().toUpperCase();
+          if (canonicalValues[0].indexOf(size) < 0) return;
+          var stock = Number(entry.stock) || 0;
+          var sold = Number(entry.sold) || 0;
+          if (!Array.isArray(base.colorVariants[color])) {
+            stock = Math.floor(stock / divisor) + (colorIndex < stock % divisor ? 1 : 0);
+            sold = Math.floor(sold / divisor) + (colorIndex < sold % divisor ? 1 : 0);
+          }
+          var key = fitVariantKey(color, [size, canonicalValues[1][0], canonicalValues[2][0]]);
+          var current = legacyFitStock.get(key) || { color: color, values: [size, canonicalValues[1][0], canonicalValues[2][0]], stock: 0, sold: 0 };
+          current.stock += stock;
+          current.sold += sold;
+          legacyFitStock.set(key, current);
+        });
+      });
+    }
+    base.fitOptionsEnabled = true;
+    base.fitOptionGroups = UNIFIED_FIT_GROUPS.map(function (group) {
+      return Object.assign({}, group, { values: group.values.slice(), options: group.values.slice() });
+    });
+    base.fitVariants = [];
+    var colorsForVariants = (Array.isArray(base.colors) && base.colors.length ? base.colors : DEFAULT_COLORS).map(String);
+    colorsForVariants.forEach(function (color) {
+      canonicalValues[0].forEach(function (size) {
+        canonicalValues[1].forEach(function (shirtLength) {
+          canonicalValues[2].forEach(function (pantLength) {
+            var values = [size, shirtLength, pantLength];
+            var key = fitVariantKey(color, values);
+            var saved = legacyFitStock.get(key) || {};
+            base.fitVariants.push({ key: key, color: color, values: values, stock: Math.max(0, num(saved.stock)), sold: Math.max(0, num(saved.sold)) });
+          });
+        });
+      });
+    });
+    if (!oldFitVariants.length && base.fitVariants.length) {
+      var migratedStock = base.fitVariants.reduce(function (sum, variant) { return sum + variant.stock; }, 0);
+      var migratedSold = base.fitVariants.reduce(function (sum, variant) { return sum + variant.sold; }, 0);
+      if (base.stock != null && Number.isFinite(Number(base.stock))) base.fitVariants[0].stock = Math.max(0, base.fitVariants[0].stock + num(base.stock) - migratedStock);
+      if (base.sold != null && Number.isFinite(Number(base.sold))) base.fitVariants[0].sold = Math.max(0, base.fitVariants[0].sold + num(base.sold) - migratedSold);
+    }
+    base.fitInventory = {};
     base.description = base.description || meta.description;
     base.reviews = (Array.isArray(base.reviews) && base.reviews.length) ? base.reviews : meta.reviews;
     base.faqs = (Array.isArray(base.faqs) && base.faqs.length) ? base.faqs : meta.faqs;
@@ -474,6 +568,25 @@
   }
 
   function inventoryRows(product) {
+    if (product && product.fitOptionsEnabled && product.fitInventory && Object.keys(product.fitInventory).length) {
+      var fitGroups = product.fitOptionGroups || [];
+      return Object.keys(product.fitInventory).reduce(function (rows, color) {
+        fitGroups.forEach(function (group) {
+          (product.fitInventory[color][group.label] || []).forEach(function (entry) {
+            rows.push({
+              color: color,
+              label: group.label + ': ' + entry.label,
+              stock: entry.stock,
+              sold: entry.sold,
+              cost: num(product.cost),
+              price: num(product.price),
+              compareAtPrice: 0
+            });
+          });
+        });
+        return rows;
+      }, []);
+    }
     if (product && product.fitOptionsEnabled && Array.isArray(product.fitVariants)) {
       var groups = product.fitOptionGroups || [];
       return product.fitVariants.map(function (variant) {
@@ -515,8 +628,56 @@
     if (!product || !product.fitOptionsEnabled || !groups.length) return null;
     var values = groups.map(function (group) { return String(selections && selections[group.label] || ''); });
     if (values.some(function (value) { return !value; })) return null;
+    var colorInventory = product.fitInventory && product.fitInventory[color];
+    if (colorInventory) {
+      var entries = groups.map(function (group, index) {
+        return (colorInventory[group.label] || []).find(function (entry) {
+          return String(entry.label).toLowerCase() === values[index].toLowerCase();
+        });
+      });
+      if (entries.some(function (entry) { return !entry; })) return null;
+      return {
+        key: fitVariantKey(color, values),
+        color: String(color || ''),
+        values: values,
+        stock: Math.min.apply(null, entries.map(function (entry) { return Number(entry.stock) || 0; })),
+        sold: Math.min.apply(null, entries.map(function (entry) { return Number(entry.sold) || 0; }))
+      };
+    }
     var key = fitVariantKey(color, values);
     return (product.fitVariants || []).find(function (variant) { return variant.key === key; }) || null;
+  }
+
+  /* Total stock across every combination that matches the already-chosen
+     options, with `groupLabel` fixed to `value` and the remaining groups left
+     free. Used by the storefront to grey out a value once no matching
+     combination has stock left. */
+  function fitValueStock(product, color, selections, groupLabel, value) {
+    var groups = product && Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
+    if (!product || !product.fitOptionsEnabled || !groups.length) return 0;
+    var target = String(value == null ? '' : value);
+    var colorInventory = product.fitInventory && product.fitInventory[color];
+    if (colorInventory) {
+      var groupInventory = colorInventory[groupLabel] || [];
+      var entry = groupInventory.find(function (candidate) {
+        return String(candidate.label).toLowerCase() === target.toLowerCase();
+      });
+      return entry ? Number(entry.stock) || 0 : 0;
+    }
+    var chosen = {};
+    groups.forEach(function (group) {
+      var picked = String(selections && selections[group.label] || '');
+      chosen[group.label] = group.label === groupLabel ? target : picked;
+    });
+    return (product.fitVariants || []).reduce(function (sum, variant) {
+      if (String(variant.color || '') !== String(color || '')) return sum;
+      var values = Array.isArray(variant.values) ? variant.values : [];
+      var matches = groups.every(function (group, index) {
+        var wanted = chosen[group.label];
+        return !wanted || String(values[index] || '') === wanted;
+      });
+      return matches ? sum + (Number(variant.stock) || 0) : sum;
+    }, 0);
   }
 
   function stockFor(product, label, color) {
@@ -535,10 +696,31 @@
   }
 
   function totalStock(product) {
+    if (product && product.fitOptionsEnabled && product.fitInventory && Object.keys(product.fitInventory).length) {
+      var groups = product.fitOptionGroups || [];
+      return Object.keys(product.fitInventory).reduce(function (sum, color) {
+        if (!groups.length) return sum;
+        var availableByGroup = groups.map(function (group) {
+          return (product.fitInventory[color][group.label] || []).reduce(function (groupSum, entry) {
+            return groupSum + (Number(entry.stock) || 0);
+          }, 0);
+        });
+        return sum + Math.min.apply(null, availableByGroup);
+      }, 0);
+    }
     return inventoryRows(product).reduce(function (sum, size) { return sum + (Number(size.stock) || 0); }, 0);
   }
 
   function totalSold(product) {
+    if (product && product.fitOptionsEnabled && product.fitInventory && Object.keys(product.fitInventory).length) {
+      var firstGroup = (product.fitOptionGroups || [])[0];
+      if (!firstGroup) return num(product.sold);
+      return Object.keys(product.fitInventory).reduce(function (sum, color) {
+        return sum + (product.fitInventory[color][firstGroup.label] || []).reduce(function (groupSum, entry) {
+          return groupSum + (Number(entry.sold) || 0);
+        }, 0);
+      }, 0);
+    }
     return inventoryRows(product).reduce(function (sum, size) { return sum + (Number(size.sold) || 0); }, 0) || num(product.sold);
   }
 
@@ -610,24 +792,22 @@
       name: payload.name,
       description: payload.description || '',
       sku: String(payload.sku || '').trim(),
+      productType: 'set',
+      product_type: 'set',
+      separateItem: '',
       category: slugify(payload.category),
       image: payload.image || IMAGE.fallback,
       gallery: (payload.gallery && payload.gallery.length ? payload.gallery : [payload.image || IMAGE.fallback]),
       sizeChart: payload.sizeChart || '',
+      sizeChartTable: payload.sizeChartTable && typeof payload.sizeChartTable === 'object' ? payload.sizeChartTable : { columns: [], rows: [] },
       splitImageView: Boolean(payload.splitImageView),
       colorImages: payload.colorImages || (state.products[index] && state.products[index].colorImages) || {},
       colorMasks: payload.colorMasks || (state.products[index] && state.products[index].colorMasks) || {},
       tag: payload.tag || '',
       colors: payload.colors && payload.colors.length ? payload.colors : DEFAULT_COLORS.slice(),
       colorVariants: colorVariants,
-      fitOptionsEnabled: Boolean(payload.fitOptionsEnabled),
-      fitOptionGroups: (payload.fitOptionGroups || []).map(function (group) {
-        return {
-          label: String(group.label || '').trim(),
-          display: group.display === 'radio' ? 'radio' : 'select',
-          values: (group.values || []).map(function (value) { return String(value).trim(); }).filter(Boolean)
-        };
-      }),
+      fitOptionsEnabled: true,
+      fitOptionGroups: UNIFIED_FIT_GROUPS.map(function (group) { return Object.assign({}, group, { values: group.values.slice(), options: group.values.slice() }); }),
       fitVariants: (payload.fitVariants || []).map(function (variant) {
         var values = (variant.values || []).map(String);
         return {
@@ -638,6 +818,23 @@
           sold: Math.max(0, num(variant.sold))
         };
       }),
+      fitInventory: payload.fitInventory && typeof payload.fitInventory === 'object'
+        ? Object.keys(payload.fitInventory).reduce(function (inventory, color) {
+          var groups = payload.fitInventory[color];
+          if (!groups || typeof groups !== 'object' || Array.isArray(groups)) return inventory;
+          inventory[color] = Object.keys(groups).reduce(function (normalized, groupLabel) {
+            normalized[groupLabel] = Array.isArray(groups[groupLabel]) ? groups[groupLabel].map(function (entry, position) {
+              return {
+                label: String(entry && (entry.label || entry.size) || ('Size ' + (position + 1))).trim(),
+                stock: Math.max(0, num(entry && entry.stock)),
+                sold: Math.max(0, num(entry && entry.sold))
+              };
+            }).filter(function (entry) { return entry.label; }) : [];
+            return normalized;
+          }, {});
+          return inventory;
+        }, {})
+        : {},
       price: num(payload.price),
       cost: num(payload.cost),
       sold: sizes.reduce(function (sum, size) { return sum + (Number(size.sold) || 0); }, 0),
@@ -655,7 +852,7 @@
       faqs: payload.faqs || []
     };
     record.sold = record.fitOptionsEnabled
-      ? record.fitVariants.reduce(function (sum, variant) { return sum + variant.sold; }, 0)
+      ? totalSold(record)
       : (record.sold || num(payload.sold));
     /* The old product record has to be kept until the write succeeds. If storage
        is full, setItem throws and the in-memory list would keep the new product
@@ -951,11 +1148,17 @@
     var unitsInStock = products.reduce(function (sum, product) { return sum + totalStock(product); }, 0);
     var unitsSold = products.reduce(function (sum, product) { return sum + totalSold(product); }, 0);
     var stockValue = products.reduce(function (sum, product) {
+      if (product.fitOptionsEnabled && product.fitInventory && Object.keys(product.fitInventory).length) {
+        return sum + totalStock(product) * num(product.price);
+      }
       return sum + inventoryRows(product).reduce(function (inner, size) {
         return inner + (Number(size.stock) || 0) * (size.price > 0 ? size.price : num(product.price));
       }, 0);
     }, 0);
     var costValue = products.reduce(function (sum, product) {
+      if (product.fitOptionsEnabled && product.fitInventory && Object.keys(product.fitInventory).length) {
+        return sum + totalStock(product) * num(product.cost);
+      }
       return sum + inventoryRows(product).reduce(function (inner, size) {
         return inner + (Number(size.stock) || 0) * num(size.cost);
       }, 0);
@@ -1216,6 +1419,7 @@
     sizeOf: sizeOf,
     fitVariantKey: fitVariantKey,
     fitVariantFor: fitVariantFor,
+    fitValueStock: fitValueStock,
     stockFor: stockFor,
     priceFor: priceFor,
     compareAtPriceFor: compareAtPriceFor,
