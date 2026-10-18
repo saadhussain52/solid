@@ -54,6 +54,7 @@ const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const SENDER_EMAIL = process.env.SENDER_EMAIL || 'saadhussain3536@gmail.com';
 const OFFICIAL_EMAIL = process.env.OFFICIAL_EMAIL || 'solids.pk.official@gmail.com';
+const OFFICIAL_PHONE = process.env.OFFICIAL_PHONE || '+92 341 2782443';
 const MAIL_FROM = process.env.MAIL_FROM || `Solids <${SENDER_EMAIL}>`;
 const MAIL_REPLY_TO = process.env.MAIL_REPLY_TO || OFFICIAL_EMAIL;
 /* Where the order alert goes. Optional. */
@@ -581,7 +582,7 @@ const buildCustomerEmail = (order, req) => {
     '',
     'Delivery takes 4–7 working days. We will email you again the moment it ships.',
     '',
-    'Questions? Contact us at ' + OFFICIAL_EMAIL + ' or reply to this message.',
+    'Questions? Email ' + OFFICIAL_EMAIL + ' or WhatsApp/call ' + OFFICIAL_PHONE + '.',
     '',
     '— Solids'
   ].join('\n');
@@ -614,7 +615,7 @@ const buildCustomerEmail = (order, req) => {
     '" style="display:inline-block;background:#292827;color:#fff;padding:14px 22px;text-decoration:none;font-size:12px;letter-spacing:1px">TRACK YOUR PARCEL</a></p>',
     '<p style="margin:16px 0 0;font-size:11px;color:#8a8378;line-height:1.6">Or paste this link into any browser:<br>' +
     escapeHtml(trackUrl) + '</p>',
-    '<p style="margin:22px 0 0;font-size:11px;color:#8a8378">Delivery takes 4–7 working days. We will email you again the moment it ships. Questions? ' + escapeHtml(OFFICIAL_EMAIL) + '</p>',
+    '<p style="margin:22px 0 0;font-size:11px;color:#8a8378">Delivery takes 4–7 working days. We will email you again the moment it ships. Questions? ' + escapeHtml(OFFICIAL_EMAIL) + ' · ' + escapeHtml(OFFICIAL_PHONE) + '</p>',
     '</div>'
   ].join('');
 
