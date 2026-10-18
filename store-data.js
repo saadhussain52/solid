@@ -31,7 +31,7 @@
   var DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
   var DEFAULT_COLORS = ['Bone', 'Black', 'Olive'];
   var UNIFIED_FIT_GROUPS = [
-    { id: 'set_size', label: 'Set Size', type: 'select', display: 'select', values: ['XS', 'S', 'M', 'L', 'XL'] },
+    { id: 'set_size', label: 'Set Size', type: 'radio', display: 'radio', values: ['XS', 'S', 'M', 'L', 'XL'] },
     { id: 'shirt_length', label: 'Shirt Length', type: 'radio', display: 'radio', values: ['44', '46', '48', '50'] },
     { id: 'pant_length', label: 'Pant Length', type: 'radio', display: 'radio', values: ['32', '34', '36', '38'] }
   ];
@@ -414,7 +414,14 @@
         sold: Math.max(0, num(variant && variant.sold))
       };
     }) : [];
-    var canonicalValues = UNIFIED_FIT_GROUPS.map(function (group) { return group.values; });
+    var canonicalGroups = UNIFIED_FIT_GROUPS.map(function (group, index) {
+      var existing = oldFitGroups.find(function (saved) {
+        return saved.id === group.id || saved.label.toLowerCase() === group.label.toLowerCase();
+      }) || oldFitGroups[index];
+      var values = existing && existing.values.length ? Array.from(new Set(existing.values)) : group.values.slice();
+      return Object.assign({}, group, { values: values, options: values.slice() });
+    });
+    var canonicalValues = canonicalGroups.map(function (group) { return group.values; });
     var groupIndex = function (pattern, fallback) {
       var index = oldFitGroups.findIndex(function (group) { return pattern.test(group.label); });
       return index >= 0 ? index : fallback;
@@ -426,8 +433,8 @@
     var legacyFitStock = new Map();
     oldFitVariants.forEach(function (variant) {
       var values = variant.values || [];
-      var size = String(values[sizeIndex] || '').trim().toUpperCase();
-      if (canonicalValues[0].indexOf(size) < 0) return;
+      var size = canonicalValues[0].find(function (option) { return option.toLowerCase() === String(values[sizeIndex] || '').trim().toLowerCase(); });
+      if (!size) return;
       var shirtLength = normalizeLength(values[shirtLengthIndex] || canonicalValues[1][0]);
       var pantLength = normalizeLength(values[pantLengthIndex] || canonicalValues[2][0]);
       if (canonicalValues[1].indexOf(shirtLength) < 0) shirtLength = canonicalValues[1][0];
@@ -444,8 +451,8 @@
       colorsForMigration.forEach(function (color, colorIndex) {
         var source = Array.isArray(base.colorVariants[color]) ? base.colorVariants[color] : base.sizes;
         source.forEach(function (entry) {
-          var size = String(entry.label || '').trim().toUpperCase();
-          if (canonicalValues[0].indexOf(size) < 0) return;
+          var size = canonicalValues[0].find(function (option) { return option.toLowerCase() === String(entry.label || '').trim().toLowerCase(); });
+          if (!size) return;
           var stock = Number(entry.stock) || 0;
           var sold = Number(entry.sold) || 0;
           if (!Array.isArray(base.colorVariants[color])) {
@@ -461,9 +468,7 @@
       });
     }
     base.fitOptionsEnabled = true;
-    base.fitOptionGroups = UNIFIED_FIT_GROUPS.map(function (group) {
-      return Object.assign({}, group, { values: group.values.slice(), options: group.values.slice() });
-    });
+    base.fitOptionGroups = canonicalGroups;
     base.fitVariants = [];
     var colorsForVariants = (Array.isArray(base.colors) && base.colors.length ? base.colors : DEFAULT_COLORS).map(String);
     colorsForVariants.forEach(function (color) {
@@ -807,7 +812,15 @@
       colors: payload.colors && payload.colors.length ? payload.colors : DEFAULT_COLORS.slice(),
       colorVariants: colorVariants,
       fitOptionsEnabled: true,
-      fitOptionGroups: UNIFIED_FIT_GROUPS.map(function (group) { return Object.assign({}, group, { values: group.values.slice(), options: group.values.slice() }); }),
+      fitOptionGroups: UNIFIED_FIT_GROUPS.map(function (group) {
+        var incoming = (payload.fitOptionGroups || []).find(function (candidate) {
+          return candidate.id === group.id || String(candidate.label || '').toLowerCase() === group.label.toLowerCase();
+        });
+        var values = incoming && Array.isArray(incoming.values || incoming.options)
+          ? Array.from(new Set((incoming.values || incoming.options).map(function (value) { return String(value).trim(); }).filter(Boolean)))
+          : group.values.slice();
+        return Object.assign({}, group, { values: values, options: values.slice() });
+      }),
       fitVariants: (payload.fitVariants || []).map(function (variant) {
         var values = (variant.values || []).map(String);
         return {

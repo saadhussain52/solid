@@ -103,7 +103,7 @@ const saveOrders = orders => {
 let productsCache;
 
 const unifiedFitGroups = [
-  { id: 'set_size', label: 'Set Size', type: 'select', display: 'select', values: ['XS', 'S', 'M', 'L', 'XL'] },
+  { id: 'set_size', label: 'Set Size', type: 'radio', display: 'radio', values: ['XS', 'S', 'M', 'L', 'XL'] },
   { id: 'shirt_length', label: 'Shirt Length', type: 'radio', display: 'radio', values: ['44', '46', '48', '50'] },
   { id: 'pant_length', label: 'Pant Length', type: 'radio', display: 'radio', values: ['32', '34', '36', '38'] }
 ];
@@ -112,6 +112,13 @@ const normalizeStoredProductSizing = product => {
   if (!product || typeof product !== 'object') return product;
   const oldGroups = Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
   const oldVariants = Array.isArray(product.fitVariants) ? product.fitVariants : [];
+  const fitGroups = unifiedFitGroups.map((group, index) => {
+    const existing = oldGroups.find(saved => saved.id === group.id || String(saved.label || '').toLowerCase() === group.label.toLowerCase()) || oldGroups[index];
+    const values = existing && Array.isArray(existing.values || existing.options)
+      ? Array.from(new Set((existing.values || existing.options).map(value => String(value).trim()).filter(Boolean)))
+      : [];
+    return { ...group, values: values.length ? values : group.values.slice() };
+  });
   const groupIndex = (pattern, fallback) => {
     const found = oldGroups.findIndex(group => pattern.test(String(group.label || '')));
     return found >= 0 ? found : fallback;
@@ -130,12 +137,12 @@ const normalizeStoredProductSizing = product => {
   const cleanLength = value => String(value || '').replace(/\s*\(standard\)\s*/i, '').trim();
   oldVariants.forEach(variant => {
     const values = Array.isArray(variant.values) ? variant.values : [];
-    const size = String(values[sizeIndex] || '').trim().toUpperCase();
-    if (!unifiedFitGroups[0].values.includes(size)) return;
-    let shirtLength = cleanLength(values[shirtLengthIndex] || unifiedFitGroups[1].values[0]);
-    let pantLength = cleanLength(values[pantLengthIndex] || unifiedFitGroups[2].values[0]);
-    if (!unifiedFitGroups[1].values.includes(shirtLength)) shirtLength = unifiedFitGroups[1].values[0];
-    if (!unifiedFitGroups[2].values.includes(pantLength)) pantLength = unifiedFitGroups[2].values[0];
+    const size = fitGroups[0].values.find(option => option.toLowerCase() === String(values[sizeIndex] || '').trim().toLowerCase());
+    if (!size) return;
+    let shirtLength = cleanLength(values[shirtLengthIndex] || fitGroups[1].values[0]);
+    let pantLength = cleanLength(values[pantLengthIndex] || fitGroups[2].values[0]);
+    if (!fitGroups[1].values.includes(shirtLength)) shirtLength = fitGroups[1].values[0];
+    if (!fitGroups[2].values.includes(pantLength)) pantLength = fitGroups[2].values[0];
     addStock(variant.color, [size, shirtLength, pantLength], variant.stock, variant.sold);
   });
   if (!oldVariants.length) {
@@ -144,21 +151,21 @@ const normalizeStoredProductSizing = product => {
       const colorInventory = product.colorVariants && Array.isArray(product.colorVariants[color]) ? product.colorVariants[color] : null;
       const sizes = colorInventory || (Array.isArray(product.sizes) ? product.sizes : []);
       sizes.forEach(entry => {
-        const size = String(entry.label || entry.size || '').trim().toUpperCase();
-        if (!unifiedFitGroups[0].values.includes(size)) return;
+        const size = fitGroups[0].values.find(option => option.toLowerCase() === String(entry.label || entry.size || '').trim().toLowerCase());
+        if (!size) return;
         let stock = Math.max(0, Number(entry.stock) || 0);
         let sold = Math.max(0, Number(entry.sold) || 0);
         if (!colorInventory) {
           stock = Math.floor(stock / colors.length) + (colorIndex < stock % colors.length ? 1 : 0);
           sold = Math.floor(sold / colors.length) + (colorIndex < sold % colors.length ? 1 : 0);
         }
-        addStock(color, [size, '44', '32'], stock, sold);
+        addStock(color, [size, fitGroups[1].values[0], fitGroups[2].values[0]], stock, sold);
       });
     });
   }
   const colors = Array.isArray(product.colors) && product.colors.length ? product.colors.map(String) : ['Bone'];
   const variants = [];
-  colors.forEach(color => unifiedFitGroups[0].values.forEach(size => unifiedFitGroups[1].values.forEach(shirtLength => unifiedFitGroups[2].values.forEach(pantLength => {
+  colors.forEach(color => fitGroups[0].values.forEach(size => fitGroups[1].values.forEach(shirtLength => fitGroups[2].values.forEach(pantLength => {
     const values = [size, shirtLength, pantLength];
     const key = JSON.stringify([color, ...values]);
     const saved = stockByKey.get(key) || {};
@@ -174,7 +181,7 @@ const normalizeStoredProductSizing = product => {
   product.product_type = 'set';
   product.separateItem = '';
   product.fitOptionsEnabled = true;
-  product.fitOptionGroups = unifiedFitGroups.map(group => ({ ...group, values: group.values.slice(), options: group.values.slice() }));
+  product.fitOptionGroups = fitGroups.map(group => ({ ...group, type: 'radio', display: 'radio', values: group.values.slice(), options: group.values.slice() }));
   product.fitVariants = variants;
   product.fitInventory = {};
   return product;

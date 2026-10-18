@@ -391,13 +391,20 @@
     };
     colorEntries = readSavedColors();
     const FIT_OPTION_DEFAULTS = [
-      { id: 'set_size', label: 'Set Size', display: 'select', values: ['XS', 'S', 'M', 'L', 'XL'] },
+      { id: 'set_size', label: 'Set Size', display: 'radio', values: ['XS', 'S', 'M', 'L', 'XL'] },
       { id: 'shirt_length', label: 'Shirt Length', display: 'radio', values: ['44', '46', '48', '50'] },
       { id: 'pant_length', label: 'Pant Length', display: 'radio', values: ['32', '34', '36', '38'] }
     ];
-    let fitGroups = FIT_OPTION_DEFAULTS.map(group => ({ ...group, values: group.values.slice() }));
+    let fitGroups = FIT_OPTION_DEFAULTS.map((group, index) => {
+      const saved = product && Array.isArray(product.fitOptionGroups)
+        ? product.fitOptionGroups.find(candidate => candidate.id === group.id || String(candidate.label || '').toLowerCase() === group.label.toLowerCase()) || product.fitOptionGroups[index]
+        : null;
+      const values = saved && Array.isArray(saved.values || saved.options) && (saved.values || saved.options).length
+        ? (saved.values || saved.options).map(String)
+        : group.values.slice();
+      return { ...group, display: 'radio', values };
+    });
     const copyFitGroup = group => ({ ...group, values: (group.values || []).slice() });
-    fitGroups = FIT_OPTION_DEFAULTS.map(copyFitGroup);
     let fitVariants = product && Array.isArray(product.fitVariants) ? product.fitVariants.map(variant => ({ ...variant, values: (variant.values || []).slice() })) : [];
     let fitMatrixCombinations = [];
     const fitMatrixHost = $('[data-fit-stock-matrix]', modal);
@@ -536,8 +543,23 @@
       toast(`Updated ${updated} combinations. Save product to keep the changes.`);
     });
     const fitGroupsHost = $('[data-fit-groups]', modal);
-    fitGroupsHost.innerHTML = fitGroups.map(group => `<div class="fit-group-editor fit-group-locked">
-      <strong>${escapeHtml(group.label)}</strong><span>${escapeHtml(group.display === 'radio' ? 'Radio buttons' : 'Dropdown')}</span><small>${escapeHtml(group.values.join(' · '))}</small></div>`).join('');
+    const parseFitValues = value => Array.from(new Set(String(value || '').split(',').map(item => item.trim()).filter(Boolean)));
+    const paintFitGroups = () => {
+      fitGroupsHost.innerHTML = fitGroups.map((group, index) => `<div class="fit-group-editor fit-group-locked" data-fit-group-row="${index}">
+        <strong>${escapeHtml(group.label)}</strong><span>Radio buttons</span>
+        <label>Values<input type="text" data-fit-group-options value="${escapeAttr(group.values.join(', '))}" placeholder="Comma-separated values"></label>
+      </div>`).join('');
+    };
+    paintFitGroups();
+    fitGroupsHost.addEventListener('change', event => {
+      const input = event.target.closest('[data-fit-group-options]');
+      if (!input) return;
+      const row = input.closest('[data-fit-group-row]');
+      const index = Number(row && row.dataset.fitGroupRow);
+      if (!fitGroups[index]) return;
+      fitGroups[index].values = parseFitValues(input.value);
+      paintFitMatrix();
+    });
     const skuInput = $('[data-field="sku"]', modal);
     const chartImage = $('[data-size-chart-preview]', modal);
     let sizeChart = product && product.sizeChart || '';
@@ -771,7 +793,11 @@
     $('#product-editor-form', modal).addEventListener('submit', async event => {
       event.preventDefault();
       if (!Store.api.productsOnline) { toast('The shared product server is unavailable. Nothing was saved.'); return; }
-      fitGroups = FIT_OPTION_DEFAULTS.map(copyFitGroup);
+      fitGroups = fitGroups.map((group, index) => {
+        const row = $$('[data-fit-group-row]', fitGroupsHost)[index];
+        const input = row && $('[data-fit-group-options]', row);
+        return { ...group, display: 'radio', values: parseFitValues(input ? input.value : group.values.join(', ')) };
+      });
       const name = $('[data-field="name"]', modal).value.trim();
       if (!name) { toast('Please enter a product name'); return; }
       const fitOptionsEnabled = true;

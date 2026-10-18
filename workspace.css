@@ -406,7 +406,8 @@
 .product-editor .editor-section .fit-group-manager{margin:12px 0 0}
 .product-editor .fit-group-locked{display:grid;grid-template-columns:minmax(130px,.8fr) minmax(120px,.5fr) minmax(200px,1.5fr);gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);font-size:11px}
 .product-editor .fit-group-locked span{color:var(--muted)}
-.product-editor .fit-group-locked small{color:var(--ink);font-size:11px}
+.product-editor .fit-group-locked label{display:block;margin:0;font-size:10px;color:var(--muted)}
+.product-editor .fit-group-locked input{display:block;width:100%;margin-top:4px;padding:8px 9px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-size:11px}
 .product-editor .fit-bulk-panel{margin:18px 0 12px;padding:14px;border:1px solid var(--line);background:#f8f6f2}
 .product-editor .fit-bulk-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:12px}
 .product-editor .fit-bulk-heading span{color:var(--muted);font-size:10px}
@@ -453,7 +454,7 @@
   .product-editor .editor-fields{grid-template-columns:1fr 1fr}
   .product-editor .editor-fields .editor-description{grid-column:1/-1}
   .product-editor .fit-group-locked{grid-template-columns:1fr auto}
-  .product-editor .fit-group-locked small{grid-column:1/-1}
+  .product-editor .fit-group-locked label{grid-column:1/-1}
   .product-editor .fit-bulk-control{grid-template-columns:repeat(2,minmax(0,1fr))}
   .product-editor .size-chart-row{grid-template-columns:minmax(90px,1fr) repeat(2,minmax(110px,1fr)) 30px;min-width:500px}
 }
