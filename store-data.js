@@ -993,6 +993,17 @@
     if (!state.orders[index]) return;
     state.orders[index].status = status;
     save('orders');
+    var order = state.orders[index];
+    if (api.productsOnline) {
+      return api.updateOrder(order.trackingId || order.id, status).then(function (result) {
+        if (result && result.order) state.orders[index] = Object.assign({}, state.orders[index], result.order);
+        return result;
+      }).catch(function (error) {
+        announce('The order was updated locally, but its server notification could not be sent: ' + error.message);
+        return { ok: false, error: error.message };
+      });
+    }
+    return Promise.resolve({ ok: true, localOnly: true });
   }
 
   function setUserStatus(index, status) {
@@ -1405,6 +1416,21 @@
           api.online = true;
           return data;
         });
+    },
+
+    updateOrder: function (reference, status) {
+      return fetch('/api/orders/' + encodeURIComponent(reference), {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: status })
+      }).then(function (response) {
+        return response.json().then(function (data) {
+          if (response.status === 401) { api.sendToLogin(); throw new Error('Please sign in to the admin panel.'); }
+          if (!response.ok) throw new Error(data.error || 'Could not update order status.');
+          return data;
+        });
+      });
     }
   };
 

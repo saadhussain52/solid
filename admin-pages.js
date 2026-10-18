@@ -860,9 +860,11 @@ function filterOrders(term) {
       || `<p class="muted">${term ? 'No order matches "' + escapeHtml(orderSearchTerm.trim()) + '".' : 'No orders yet.'}</p>`;
 
     $$('[data-order-status]', root).forEach(select => select.addEventListener('change', event => {
-      Store.setOrderStatus(Number(event.target.dataset.orderStatus), event.target.value);
-      toast('Order marked ' + event.target.value);
-      document.dispatchEvent(new CustomEvent('store:changed', { detail: { type: 'order' } }));
+      const status = event.target.value;
+      Promise.resolve(Store.setOrderStatus(Number(event.target.dataset.orderStatus), status)).then(result => {
+        toast(result && result.ok === false ? 'Order saved locally; server notification failed.' : 'Order marked ' + status);
+        document.dispatchEvent(new CustomEvent('store:changed', { detail: { type: 'order' } }));
+      });
     }));
     $$('[data-remove-order]', root).forEach(button => button.addEventListener('click', () => {
       if (!confirm('Remove this order?')) return;
@@ -919,10 +921,12 @@ function filterOrders(term) {
         <div class="checkout-summary"><span>Order total</span><strong>${money(Store.orderTotal(order))}</strong></div>
       </div>`;
     $('[data-sheet-status]', host).addEventListener('change', event => {
-      Store.setOrderStatus(index, event.target.value);
-      toast('Order updated');
-      renderOrders($('#orders-page-list'));
-      document.dispatchEvent(new CustomEvent('store:changed', { detail: { type: 'order' } }));
+      const status = event.target.value;
+      Promise.resolve(Store.setOrderStatus(index, status)).then(result => {
+        toast(result && result.ok === false ? 'Order saved locally; server notification failed.' : 'Order updated');
+        renderOrders($('#orders-page-list'));
+        document.dispatchEvent(new CustomEvent('store:changed', { detail: { type: 'order' } }));
+      });
     });
     $('[data-close-sheet]', host).addEventListener('click', () => host.classList.remove('show'));
     host.addEventListener('click', event => { if (event.target === host) host.classList.remove('show'); });

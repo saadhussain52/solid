@@ -52,13 +52,15 @@ const PORT = Number(process.env.PORT) || 5173;
    SITE_URL=https://yourdomain.com — otherwise the request host is used. */
 const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const MAIL_FROM = process.env.MAIL_FROM || 'Solids <onboarding@resend.dev>';
+const SENDER_EMAIL = process.env.SENDER_EMAIL || 'saadhussain3536@gmail.com';
+const OFFICIAL_EMAIL = process.env.OFFICIAL_EMAIL || 'solids.pk.official@gmail.com';
+const MAIL_FROM = process.env.MAIL_FROM || `Solids <${SENDER_EMAIL}>`;
+const MAIL_REPLY_TO = process.env.MAIL_REPLY_TO || OFFICIAL_EMAIL;
 /* Where the order alert goes. Optional. */
-const STUDIO_EMAIL = process.env.STUDIO_EMAIL || 'saadhussain3536@gmail.com';
-const STUDIO_WHATSAPP = process.env.STUDIO_WHATSAPP || '03306253428';
-const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
-const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || '';
+const STUDIO_EMAIL = process.env.STUDIO_EMAIL || SENDER_EMAIL;
+const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || '';
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || 'solids_order_tracking';
 const WHATSAPP_TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en_US';
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
@@ -579,7 +581,7 @@ const buildCustomerEmail = (order, req) => {
     '',
     'Delivery takes 4–7 working days. We will email you again the moment it ships.',
     '',
-    'Questions? Just reply to this message.',
+    'Questions? Contact us at ' + OFFICIAL_EMAIL + ' or reply to this message.',
     '',
     '— Solids'
   ].join('\n');
@@ -612,7 +614,7 @@ const buildCustomerEmail = (order, req) => {
     '" style="display:inline-block;background:#292827;color:#fff;padding:14px 22px;text-decoration:none;font-size:12px;letter-spacing:1px">TRACK YOUR PARCEL</a></p>',
     '<p style="margin:16px 0 0;font-size:11px;color:#8a8378;line-height:1.6">Or paste this link into any browser:<br>' +
     escapeHtml(trackUrl) + '</p>',
-    '<p style="margin:22px 0 0;font-size:11px;color:#8a8378">Delivery takes 4–7 working days. We will email you again the moment it ships.</p>',
+    '<p style="margin:22px 0 0;font-size:11px;color:#8a8378">Delivery takes 4–7 working days. We will email you again the moment it ships. Questions? ' + escapeHtml(OFFICIAL_EMAIL) + '</p>',
     '</div>'
   ].join('');
 
@@ -677,6 +679,7 @@ const sendMail = async message => {
     },
     body: JSON.stringify({
       from: MAIL_FROM,
+      reply_to: MAIL_REPLY_TO,
       to: message.to,
       subject: message.subject,
       text: message.text,
@@ -809,9 +812,13 @@ const readBinary = (req, limit = 6000000) => new Promise((resolve, reject) => {
 const mailCustomer = async (order, req) => {
   const mail = buildCustomerEmail(order, req);
   try {
+    if (!RESEND_API_KEY) {
+      console.warn('[mail] confirmation dispatch payload (RESEND_API_KEY missing):', JSON.stringify({ to: order.email, subject: 'Your Solids order ' + order.id + ' — tracking details', orderId: order.id, trackingId: order.trackingId, items: order.items, instructions: "Use the website footer's Track Your Order link and enter the Tracking ID." }));
+      return { emailSent: false, reason: 'no-key', trackUrl: mail.trackUrl };
+    }
     const result = await sendMail({
       to: order.email,
-      subject: 'Your Solids order ' + order.id + ' — track it here',
+      subject: 'Your Solids order ' + order.id + ' — tracking details',
       text: mail.lines,
       html: mail.html
     });
@@ -819,6 +826,32 @@ const mailCustomer = async (order, req) => {
   } catch (error) {
     console.error('[mail] customer email failed for ' + order.id + ':', error.message);
     return { emailSent: false, mailError: error.message, trackUrl: mail.trackUrl };
+  }
+};
+
+const mailTrackingUpdate = async (order, req) => {
+  if (!order.email) return { emailSent: false, reason: 'no-customer-email' };
+  const trackUrl = siteUrl('/track.html?id=' + encodeURIComponent(order.trackingId), req);
+  const subject = 'Solids order ' + order.id + ' update: ' + order.status;
+  const text = [
+    'Your Solids order status has been updated.', '',
+    'Order ID: ' + order.id,
+    'Tracking ID: ' + order.trackingId,
+    'Current status: ' + order.status,
+    '',
+    "For real-time updates, use the 'Track Your Order' link in the website footer and enter your Tracking ID.",
+    'Track online: ' + trackUrl
+  ].join('\n');
+  try {
+    if (!RESEND_API_KEY) {
+      console.warn('[mail] tracking update dispatch payload (RESEND_API_KEY missing):', JSON.stringify({ to: order.email, subject, orderId: order.id, trackingId: order.trackingId, status: order.status, trackUrl }));
+      return { emailSent: false, reason: 'no-key' };
+    }
+    await sendMail({ to: order.email, subject, text, html: '<p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p>' });
+    return { emailSent: true };
+  } catch (error) {
+    console.error('[mail] tracking update failed for ' + order.id + ':', error.message);
+    return { emailSent: false, reason: error.message };
   }
 };
 
@@ -840,11 +873,13 @@ const mailStudio = async (order, req) => {
 
 /* WhatsApp Cloud API needs credentials and an approved template for business
    initiated order alerts. Keep the recipient and all credentials server-side. */
-const whatsappStudio = async order => {
+const whatsappCustomer = async order => {
   if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID || !WHATSAPP_TEMPLATE_NAME) {
+    console.info('[whatsapp] not configured; dispatch payload:', JSON.stringify({ to: order.phone || '', orderId: order.id, trackingId: order.trackingId, items: order.items || [], status: order.status || 'Pending' }));
     return { sent: false, reason: 'whatsapp-not-configured' };
   }
-  const recipient = String(STUDIO_WHATSAPP).replace(/\D/g, '');
+  const recipient = String(order.phone || '').replace(/\D/g, '').replace(/^0/, '92');
+  if (!recipient) return { sent: false, reason: 'no-customer-phone' };
   const response = await fetch('https://graph.facebook.com/v21.0/' + encodeURIComponent(WHATSAPP_PHONE_NUMBER_ID) + '/messages', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + WHATSAPP_ACCESS_TOKEN, 'Content-Type': 'application/json' },
@@ -855,7 +890,8 @@ const whatsappStudio = async order => {
           { type: 'text', text: String(order.id) },
           { type: 'text', text: String(order.trackingId) },
           { type: 'text', text: String(order.customer || 'Customer') },
-          { type: 'text', text: String(order.phone || '—') }
+          { type: 'text', text: String(order.status || 'Pending') },
+          { type: 'text', text: (order.items || []).map(item => `${item.qty} x ${item.name}`).join(', ').slice(0, 900) || 'Order details in confirmation email' }
         ] }] }
     })
   });
@@ -1019,10 +1055,9 @@ const handleCreate = async (req, res) => {
   const mail = await mailCustomer(order, req);
   await mailStudio(order, req);
   try {
-    const whatsapp = await whatsappStudio(order);
-    if (!whatsapp.sent && whatsapp.reason === 'whatsapp-not-configured') console.info('[whatsapp] not sent: Cloud API environment is not configured');
+    await whatsappCustomer(order);
   } catch (error) {
-    console.error('[whatsapp] studio alert failed for ' + order.id + ':', error.message);
+    console.error('[whatsapp] customer notification failed for ' + order.id + ':', error.message);
   }
 
   return json(res, 201, {
@@ -1089,7 +1124,11 @@ const handleUpdate = async (req, res, reference) => {
 
   orders[index].status = status;
   saveOrders(orders);
-  return json(res, 200, { ok: true, order: publicOrder(orders[index]) });
+  const order = orders[index];
+  const emailResult = await mailTrackingUpdate(order, req);
+  try { await whatsappCustomer(order); }
+  catch (error) { console.error('[whatsapp] tracking update failed for ' + order.id + ':', error.message); }
+  return json(res, 200, { ok: true, order: publicOrder(order), emailSent: emailResult.emailSent });
 };
 
 /* ------------------------------------------------------- static file serving */
