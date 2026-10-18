@@ -1111,24 +1111,30 @@
       }
       const mediaLinks = document.createElement('div');
       mediaLinks.className = 'product-detail-links';
-      const sizeChartType = ['set', 'shirt', 'trouser'].includes(product.sizeChartType) ? product.sizeChartType : 'set';
-      const legacyTable = product.sizeChartTable && Array.isArray(product.sizeChartTable.columns) && Array.isArray(product.sizeChartTable.rows)
-        ? product.sizeChartTable : null;
-      const sizeCharts = product.sizeCharts && typeof product.sizeCharts === 'object' ? product.sizeCharts : {};
-      const chartParts = (sizeChartType === 'set' ? ['shirt', 'trouser'] : [sizeChartType]).map(kind => {
-        const saved = sizeCharts[kind] || {};
-        const table = saved.table || (kind === 'shirt' ? legacyTable : null);
-        const image = saved.image || (kind === 'shirt' ? product.sizeChart : '');
-        const columns = kind === 'shirt' ? ['Size', 'Shoulder', 'Bust', 'Hip', 'Length'] : ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'];
-        return { kind, title: kind === 'shirt' ? 'Shirt' : 'Trouser / pant', image, table: table && table.columns && table.rows ? table : { columns, rows: [] } };
-      });
-      const hasChart = chartParts.some(part => part.image || (part.table.rows && part.table.rows.length));
-      const sizeChartButton = hasChart
-        ? `<button type="button" data-open-size-chart>Size chart</button>`
-        : '';
-      mediaLinks.innerHTML = `<a href="shipping.html">Delivery &amp; Returns</a>`;
+      const chartType = ['set', 'shirt', 'trouser'].includes(product.sizeChartType) ? product.sizeChartType : 'set';
+      const categoryText = `${String(product.category || '')} ${String(product.name || '')}`.toLowerCase();
+      const shirtOnlyCategory = /(shirt|top)/.test(categoryText) && !/(trouser|pant|bottom|set|co-?ord)/.test(categoryText);
+      const trouserOnlyCategory = /(trouser|pant|bottom)/.test(categoryText) && !/(shirt|top|set|co-?ord)/.test(categoryText);
+      const chartKinds = chartType === 'shirt' ? ['shirt'] : chartType === 'trouser' ? ['trouser']
+        : shirtOnlyCategory ? ['shirt'] : trouserOnlyCategory ? ['trouser'] : ['shirt', 'trouser'];
+      const shirtRows = [
+        ['XS', '14', '18', '21', '48'], ['S', '14', '19', '22', '48'], ['SM', '14.5', '20', '23', '48'],
+        ['M', '15', '21', '24', '48'], ['ML', '15.5', '23', '26', '48'], ['L', '16', '24', '27.5', '48'],
+        ['XL', '16', '25', '28.5', '48'], ['XXL', '17', '27', '31', '48']
+      ];
+      const trouserRows = [
+        ['XS', '18', '11.5', '5.5', '36'], ['S', '20', '12', '5.5', '36'], ['SM', '20.5', '12.5', '6', '36'],
+        ['M', '21', '13', '6.5', '36'], ['ML', '22', '13.5', '7', '36'], ['L', '24', '14', '7.5', '36'],
+        ['XL', '26', '15', '8', '36'], ['XXL', '28', '18', '9', '36']
+      ];
+      const chartParts = chartKinds.map(kind => ({
+        kind,
+        title: kind === 'shirt' ? 'Shirt' : 'Trouser / pant',
+        columns: kind === 'shirt' ? ['Size', 'Shoulder', 'Bust', 'Hip', 'Length'] : ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'],
+        rows: kind === 'shirt' ? shirtRows : trouserRows
+      }));
+      mediaLinks.innerHTML = `<button type="button" data-open-delivery-policy>Delivery &amp; Returns</button><button type="button" data-open-size-chart>Size chart</button>`;
       const sizeLabelAnchor = fitOptionsEnabled ? fitHost : document.querySelector('.size-options');
-      if (sizeChartButton) mediaLinks.insertAdjacentHTML('afterbegin', sizeChartButton);
       if (sizeLabelAnchor) sizeLabelAnchor.insertAdjacentElement('afterend', mediaLinks);
       else document.querySelector('.product-actions')?.insertAdjacentElement('beforebegin', mediaLinks);
       const splitImageHost = document.createElement('div');
@@ -1161,13 +1167,7 @@
       sizeChartPanel.setAttribute('aria-modal', 'true');
       sizeChartPanel.setAttribute('aria-label', product.name + ' size chart');
       sizeChartPanel.hidden = true;
-      const renderChartPart = part => {
-        const chart = part.table;
-        const table = chart && chart.columns && chart.rows && chart.rows.length
-          ? `<div class="size-chart-table-wrap"><table class="size-chart-table"><thead><tr>${chart.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${chart.rows.map(row => `<tr><th scope="row">${escapeHtml(row.size || '—')}</th>${chart.columns.slice(1).map((_, index) => `<td>${escapeHtml(row.values[index] || '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
-        const image = part.image ? `<img class="product-size-chart-image" src="${escapeAttr(part.image)}" alt="${escapeAttr(product.name)} ${escapeAttr(part.title)} size chart">` : '';
-        return `<section class="product-size-chart-part"><h4>${escapeHtml(part.title)} measurements</h4>${table}${image}${!table && !image ? '<p>Size measurements are not available yet.</p>' : ''}</section>`;
-      };
+      const renderChartPart = part => `<section class="product-size-chart-part"><h4>${escapeHtml(part.title)} measurements</h4><div class="size-chart-table-wrap"><table class="size-chart-table"><thead><tr>${part.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${part.rows.map(row => `<tr>${row.map((value, index) => index === 0 ? `<th scope="row">${escapeHtml(value)}</th>` : `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`;
       sizeChartPanel.innerHTML = '<div class="product-size-chart-inner">'
         + '<button type="button" class="product-size-chart-close" data-close-size-chart aria-label="Close size chart">×</button>'
         + '<h3>Size chart</h3>' + chartParts.map(renderChartPart).join('') + '</div>';
@@ -1180,13 +1180,33 @@
         sizeChartPanel.hidden = true;
         document.body.classList.remove('size-chart-open');
       };
-      if (hasChart) {
-        document.body.appendChild(sizeChartPanel);
-        sizeChartPanel.querySelector('[data-close-size-chart]').addEventListener('click', closeSizeChart);
-        sizeChartPanel.addEventListener('click', event => { if (event.target === sizeChartPanel) closeSizeChart(); });
-        document.addEventListener('keydown', event => { if (event.key === 'Escape' && !sizeChartPanel.hidden) closeSizeChart(); });
-      }
+      document.body.appendChild(sizeChartPanel);
+      sizeChartPanel.querySelector('[data-close-size-chart]').addEventListener('click', closeSizeChart);
+      sizeChartPanel.addEventListener('click', event => { if (event.target === sizeChartPanel) closeSizeChart(); });
       mediaLinks.querySelector('[data-open-size-chart]')?.addEventListener('click', openSizeChart);
+
+      const deliveryPolicyPanel = document.createElement('div');
+      deliveryPolicyPanel.className = 'product-size-chart product-policy-modal';
+      deliveryPolicyPanel.setAttribute('role', 'dialog');
+      deliveryPolicyPanel.setAttribute('aria-modal', 'true');
+      deliveryPolicyPanel.setAttribute('aria-label', 'Delivery and returns policy');
+      deliveryPolicyPanel.hidden = true;
+      deliveryPolicyPanel.innerHTML = '<div class="product-size-chart-inner">'
+        + '<button type="button" class="product-size-chart-close" data-close-policy aria-label="Close delivery policy">×</button>'
+        + '<h3>Delivery &amp; Returns</h3>'
+        + '<section class="product-size-chart-part"><h4>2.6 Tracking information</h4><p>Once your order is placed, your Tracking ID and Order ID will be automatically sent to your WhatsApp number and Email. To track your parcel, navigate to our website footer, click \'Track Your Order\', and enter your Tracking ID to view real-time shipping status.</p></section>'
+        + '<section class="product-size-chart-part"><h4>2.7 Delivery charges — Pakistan</h4><p>Free shipping on orders above Rs. 10,000 for Islamabad and Rawalpindi. For all other cities, delivery charges depend on standard courier rates.</p></section></div>';
+      document.body.appendChild(deliveryPolicyPanel);
+      const openPolicy = () => { deliveryPolicyPanel.hidden = false; document.body.classList.add('size-chart-open'); deliveryPolicyPanel.querySelector('[data-close-policy]').focus(); };
+      const closePolicy = () => { deliveryPolicyPanel.hidden = true; document.body.classList.remove('size-chart-open'); };
+      deliveryPolicyPanel.querySelector('[data-close-policy]').addEventListener('click', closePolicy);
+      deliveryPolicyPanel.addEventListener('click', event => { if (event.target === deliveryPolicyPanel) closePolicy(); });
+      mediaLinks.querySelector('[data-open-delivery-policy]')?.addEventListener('click', openPolicy);
+      document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (!sizeChartPanel.hidden) closeSizeChart();
+        if (!deliveryPolicyPanel.hidden) closePolicy();
+      });
 
       /* Colour pictures uploaded from the admin panel, keyed by colour name.
          A colour may hold a single picture or a list of pictures. */

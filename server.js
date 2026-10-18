@@ -115,20 +115,6 @@ const unifiedFitGroups = [
 
 const normalizeStoredProductSizing = product => {
   if (!product || typeof product !== 'object') return product;
-  product.sizeChartType = ['set', 'shirt', 'trouser'].includes(product.sizeChartType) ? product.sizeChartType : 'set';
-  const legacySizeChart = typeof product.sizeChart === 'string' ? product.sizeChart : '';
-  const legacySizeChartTable = product.sizeChartTable && typeof product.sizeChartTable === 'object' ? product.sizeChartTable : { columns: [], rows: [] };
-  const charts = product.sizeCharts && typeof product.sizeCharts === 'object' ? product.sizeCharts : {};
-  product.sizeCharts = {
-    shirt: charts.shirt && typeof charts.shirt === 'object' ? charts.shirt : { image: legacySizeChart, table: legacySizeChartTable },
-    trouser: charts.trouser && typeof charts.trouser === 'object' ? charts.trouser : { image: '', table: { columns: ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'], rows: [] } }
-  };
-  for (const [kind, columns] of Object.entries({ shirt: ['Size', 'Shoulder', 'Bust', 'Hip', 'Length'], trouser: ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'] })) {
-    const chart = product.sizeCharts[kind];
-    if (!chart.table || !Array.isArray(chart.table.columns)) chart.table = { columns, rows: [] };
-    else if (chart.table.columns.length > 1 && chart.table.columns.length === columns.length
-      && chart.table.columns.slice(1).map(value => String(value).toLowerCase()).join('|') === columns.slice(1).map(value => value.toLowerCase()).join('|')) chart.table.columns = columns;
-  }
   const oldGroups = Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
   const oldVariants = Array.isArray(product.fitVariants) ? product.fitVariants : [];
   const fitGroups = unifiedFitGroups.map((group, index) => {

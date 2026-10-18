@@ -606,7 +606,7 @@ body{
 .product-size-chart-part{margin:18px 0 24px}
 .product-size-chart-part h4{margin:0 0 10px;font-size:12px;letter-spacing:.1em;text-transform:uppercase}
 .size-chart-table-wrap{max-width:100%;overflow:auto;margin-bottom:12px}
-.product-size-chart-part .product-size-chart-image{margin-top:12px}
+.product-policy-modal .product-size-chart-part p{margin:8px 0 0;line-height:1.7;font-size:14px}
 
 .product-size-chart .product-size-chart-close{
   top:12px;

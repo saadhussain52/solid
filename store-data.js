@@ -379,25 +379,6 @@
     base.productType = 'set';
     base.product_type = 'set';
     base.separateItem = '';
-    base.sizeChart = typeof base.sizeChart === 'string' ? base.sizeChart : '';
-    /* Typed size chart: columns are measurement points, rows are sizes. The first
-       column is always the size label, so values map to columns[1..]. */
-    var rawChart = base.sizeChartTable && typeof base.sizeChartTable === 'object' ? base.sizeChartTable : {};
-    var chartColumns = Array.isArray(rawChart.columns) ? rawChart.columns.map(function (column) { return String(column == null ? '' : column).trim(); }) : [];
-    if (chartColumns.length && chartColumns[0].toLowerCase() !== 'size') chartColumns.unshift('Size');
-    var chartRows = Array.isArray(rawChart.rows) ? rawChart.rows.map(function (row) {
-      return {
-        size: row && row.size != null ? String(row.size).trim() : '',
-        values: row && Array.isArray(row.values) ? row.values.map(function (value) { return value == null ? '' : String(value).trim(); }) : []
-      };
-    }).filter(function (row) { return row.size || row.values.some(Boolean); }) : [];
-    base.sizeChartTable = (chartColumns.length > 1 && chartRows.length) ? { columns: chartColumns, rows: chartRows } : { columns: [], rows: [] };
-    base.sizeChartType = ['set', 'shirt', 'trouser'].includes(base.sizeChartType) ? base.sizeChartType : 'set';
-    var rawCharts = base.sizeCharts && typeof base.sizeCharts === 'object' ? base.sizeCharts : {};
-    base.sizeCharts = {
-      shirt: rawCharts.shirt && typeof rawCharts.shirt === 'object' ? rawCharts.shirt : { image: base.sizeChart, table: base.sizeChartTable },
-      trouser: rawCharts.trouser && typeof rawCharts.trouser === 'object' ? rawCharts.trouser : { image: '', table: { columns: ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'], rows: [] } }
-    };
     base.splitImageView = Boolean(base.splitImageView);
     var oldFitGroups = Array.isArray(base.fitOptionGroups) ? base.fitOptionGroups.map(function (group) {
       var values = Array.isArray(group && (group.values || group.options)) ? (group.values || group.options).map(function (value) { return String(value).trim(); }).filter(Boolean) : [];
@@ -825,10 +806,6 @@
       category: slugify(payload.category),
       image: payload.image || IMAGE.fallback,
       gallery: (payload.gallery && payload.gallery.length ? payload.gallery : [payload.image || IMAGE.fallback]),
-      sizeChart: payload.sizeChart || '',
-      sizeChartTable: payload.sizeChartTable && typeof payload.sizeChartTable === 'object' ? payload.sizeChartTable : { columns: [], rows: [] },
-      sizeChartType: ['set', 'shirt', 'trouser'].includes(payload.sizeChartType) ? payload.sizeChartType : 'set',
-      sizeCharts: payload.sizeCharts && typeof payload.sizeCharts === 'object' ? payload.sizeCharts : {},
       splitImageView: Boolean(payload.splitImageView),
       colorImages: payload.colorImages || (state.products[index] && state.products[index].colorImages) || {},
       colorMasks: payload.colorMasks || (state.products[index] && state.products[index].colorMasks) || {},
