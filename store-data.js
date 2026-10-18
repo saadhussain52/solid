@@ -65,7 +65,7 @@
       branch: 'Gulberg III, Lahore',
       instructions: 'Send the transfer receipt to this email. We dispatch as soon as the amount reflects.'
     },
-    supportEmail: 'solid.pk.official@gmail.com',
+    supportEmail: 'solids.pk.official@gmail.com',
     supportPhone: '+92 341 2782443',
     /* Number the floating WhatsApp button opens a chat with. Digits only —
        the button builds the wa.me link from it. Edited from the admin panel's
@@ -392,6 +392,12 @@
       };
     }).filter(function (row) { return row.size || row.values.some(Boolean); }) : [];
     base.sizeChartTable = (chartColumns.length > 1 && chartRows.length) ? { columns: chartColumns, rows: chartRows } : { columns: [], rows: [] };
+    base.sizeChartType = ['set', 'shirt', 'trouser'].includes(base.sizeChartType) ? base.sizeChartType : 'set';
+    var rawCharts = base.sizeCharts && typeof base.sizeCharts === 'object' ? base.sizeCharts : {};
+    base.sizeCharts = {
+      shirt: rawCharts.shirt && typeof rawCharts.shirt === 'object' ? rawCharts.shirt : { image: base.sizeChart, table: base.sizeChartTable },
+      trouser: rawCharts.trouser && typeof rawCharts.trouser === 'object' ? rawCharts.trouser : { image: '', table: { columns: ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'], rows: [] } }
+    };
     base.splitImageView = Boolean(base.splitImageView);
     var oldFitGroups = Array.isArray(base.fitOptionGroups) ? base.fitOptionGroups.map(function (group) {
       var values = Array.isArray(group && (group.values || group.options)) ? (group.values || group.options).map(function (value) { return String(value).trim(); }).filter(Boolean) : [];
@@ -506,6 +512,17 @@
 
   /* ------------------------------------------------------------- the store */
 
+  var savedShippingSettings = read(KEYS.shipping, DEFAULT_SHIPPING);
+  var savedSettingsVersion = Number(read(KEYS.version, 0)) || 0;
+  if (savedSettingsVersion < 4) {
+    savedShippingSettings = Object.assign({}, savedShippingSettings, {
+      supportEmail: DEFAULT_SHIPPING.supportEmail,
+      supportPhone: DEFAULT_SHIPPING.supportPhone,
+      whatsappNumber: DEFAULT_SHIPPING.whatsappNumber,
+      freeDeliveryOver: 10000,
+      localCities: ['Islamabad', 'Rawalpindi']
+    });
+  }
   var state = {
     products: read(KEYS.products, DEFAULT_PRODUCTS).map(normalizeProduct),
     categories: read(KEYS.categories, DEFAULT_CATEGORIES),
@@ -514,8 +531,13 @@
     content: Object.assign({}, DEFAULT_CONTENT, read(KEYS.content, DEFAULT_CONTENT)),
     orders: read(KEYS.orders, DEFAULT_ORDERS),
     users: read(KEYS.users, DEFAULT_USERS),
-    shipping: normalizeShipping(read(KEYS.shipping, DEFAULT_SHIPPING))
+    shipping: normalizeShipping(savedShippingSettings)
   };
+  /* Public contact details are maintained centrally; replace stale saved
+     settings from older installs with the current official channels. */
+  state.shipping.supportEmail = DEFAULT_SHIPPING.supportEmail;
+  state.shipping.supportPhone = DEFAULT_SHIPPING.supportPhone;
+  state.shipping.whatsappNumber = DEFAULT_SHIPPING.whatsappNumber;
 
   function normalizeShipping(config) {
     var saved = config || {};
@@ -805,6 +827,8 @@
       gallery: (payload.gallery && payload.gallery.length ? payload.gallery : [payload.image || IMAGE.fallback]),
       sizeChart: payload.sizeChart || '',
       sizeChartTable: payload.sizeChartTable && typeof payload.sizeChartTable === 'object' ? payload.sizeChartTable : { columns: [], rows: [] },
+      sizeChartType: ['set', 'shirt', 'trouser'].includes(payload.sizeChartType) ? payload.sizeChartType : 'set',
+      sizeCharts: payload.sizeCharts && typeof payload.sizeCharts === 'object' ? payload.sizeCharts : {},
       splitImageView: Boolean(payload.splitImageView),
       colorImages: payload.colorImages || (state.products[index] && state.products[index].colorImages) || {},
       colorMasks: payload.colorMasks || (state.products[index] && state.products[index].colorMasks) || {},
@@ -1473,5 +1497,5 @@
   };
 
   api.productsReady = api.loadProducts();
-  write(KEYS.version, '2');
+  write(KEYS.version, '4');
 })(window);

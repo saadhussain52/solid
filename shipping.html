@@ -224,7 +224,7 @@
       <a class="admin-nav" href="index.html">&#8599; <span>View storefront</span></a>
       <div class="admin-user">
         <div class="avatar">SA</div>
-        <div><strong>Studio Admin</strong><small>solid.pk.official@gmail.com</small></div>
+        <div><strong>Studio Admin</strong><small>solids.pk.official@gmail.com</small></div>
       </div>
     </div>
   </aside>
@@ -254,8 +254,7 @@
         <div class="ship-grid">
           <div class="ship-card">
             <h3>Delivery &amp; shipping charges</h3>
-            <p class="muted">Two tiers, picked by the customer's city at checkout. Own-route cities pay the delivery
-              charge; every other city in Pakistan pays the shipping charge.</p>
+            <p class="muted">Free shipping applies to orders above Rs. 10,000 for Islamabad and Rawalpindi. For all other cities, delivery is charged at standard courier rates.</p>
             <div class="ship-fields">
               <!-- step="any" on purpose: a step of 50 made the browser reject any other
                    amount (typing 275 blocked the whole form from saving), so
@@ -274,6 +273,14 @@
                 <span class="ship-hint">Shown as “Shipping charges”.</span>
               </label>
             </div>
+          </div>
+
+          <div class="ship-card ship-policy-card">
+            <h3>Delivery &amp; returns policy</h3>
+            <h4>2.6 Tracking information</h4>
+            <p>Once your order is placed, your Tracking ID and Order ID will be automatically sent to your WhatsApp number and Email. To track your parcel, navigate to our website footer, click 'Track Your Order', and enter your Tracking ID to view real-time shipping status.</p>
+            <h4>2.7 Delivery charges — Pakistan</h4>
+            <p>Free shipping on orders above Rs. 10,000 for Islamabad and Rawalpindi. For all other cities, delivery charges depend on standard courier rates.</p>
           </div>
 
           <div class="ship-card">
@@ -337,7 +344,7 @@
     </section>
   </main>
 
-  <footer class="site-footer"><a class="footer-brand" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-thread-black-light.png" alt="Solids — No prints, just style"><p>Everyday, refined.</p></a><div class="footer-links"><div><p class="eyebrow">Explore</p><a href="all.html">Shop all</a><a href="all.html">Collections</a><a href="index.html#shop">New arrivals</a><a href="index.html#about">Our story</a></div><div><p class="eyebrow">Help</p><a href="track.html">Track your order</a><a href="shipping.html">Shipping &amp; returns</a><a href="mailto:solid.pk.official@gmail.com">Contact the studio</a><a class="footer-instagram" data-instagram href="https://www.instagram.com/solids.pk.official" target="_blank" rel="noopener">Instagram <span aria-hidden="true">&#8599;</span></a><span class="footer-phone" data-footer-phone>WhatsApp: +92 341 2782443</span></div><div class="newsletter"><p class="eyebrow">The mailing list</p><p>First look at new drops and quiet notes from the studio.</p><form id="newsletter-form"><input type="email" placeholder="Your email address" required><button aria-label="Subscribe">&#8599;</button></form></div></div><div class="footer-bottom"><span>© 2026 Solids Official</span><span>Pakistan / PKR</span></div></footer>
+  <footer class="site-footer"><a class="footer-brand" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-thread-black-light.png" alt="Solids — No prints, just style"><p>Everyday, refined.</p></a><div class="footer-links"><div><p class="eyebrow">Explore</p><a href="all.html">Shop all</a><a href="all.html">Collections</a><a href="index.html#shop">New arrivals</a><a href="index.html#about">Our story</a></div><div><p class="eyebrow">Help</p><a href="track.html">Track your order</a><a href="shipping.html">Shipping &amp; returns</a><a href="mailto:solids.pk.official@gmail.com">Contact the studio</a><a class="footer-instagram" data-instagram href="https://www.instagram.com/solids.pk.official" target="_blank" rel="noopener">Instagram <span aria-hidden="true">&#8599;</span></a><span class="footer-phone" data-footer-phone>WhatsApp: +92 341 2782443</span></div><div class="newsletter"><p class="eyebrow">The mailing list</p><p>First look at new drops and quiet notes from the studio.</p><form id="newsletter-form"><input type="email" placeholder="Your email address" required><button aria-label="Subscribe">&#8599;</button></form></div></div><div class="footer-bottom"><span>© 2026 Solids Official</span><span>Pakistan / PKR</span></div></footer>
 
   <script src="store-data.js"></script>
   <script>
@@ -349,7 +356,7 @@
          straight read of the form plus one call. */
       const NUMERIC = ['deliveryFee', 'freeDeliveryOver', 'shippingFee'];
       const BANK = ['bankName', 'accountTitle', 'accountNumber', 'iban', 'bankCode', 'branch', 'instructions'];
-      const FIELDS = NUMERIC.concat(BANK, ['supportEmail', 'supportPhone', 'whatsappNumber', 'instagramUrl']);
+        const FIELDS = NUMERIC.concat(BANK, ['instagramUrl']);
 
       const fill = config => {
         /* Older saved configs predate some of these keys, and assigning
@@ -361,9 +368,9 @@
           el.value = Number.isFinite(value) ? value : 0;
         });
         BANK.forEach(key => { document.querySelector('#sf-' + key).value = config.bankDetails[key] || ''; });
-        document.querySelector('#sf-supportEmail').value = config.supportEmail || '';
-        document.querySelector('#sf-supportPhone').value = config.supportPhone || '';
-        document.querySelector('#sf-whatsappNumber').value = config.whatsappNumber || '';
+        document.querySelector('#sf-supportEmail').value = 'solids.pk.official@gmail.com';
+        document.querySelector('#sf-supportPhone').value = '+92 341 2782443';
+        document.querySelector('#sf-whatsappNumber').value = '923412782443';
         document.querySelector('#sf-instagramUrl').value = config.instagramUrl || '';
         document.querySelector('#sf-localCities').value = (config.localCities || []).join('\n');
         paintHints(config);
@@ -378,12 +385,12 @@
         const cities = cityList(config);
         const localHint = document.querySelector('#sf-localCities-hint');
         if (localHint) {
-          localHint.textContent = `Charged the delivery charge (${cities}). Every other city in Pakistan pays the shipping charge.`;
+          localHint.textContent = `Free shipping above Rs. 10,000 in ${cities}. Other cities pay standard courier rates.`;
         }
         const overHint = document.querySelector('#sf-freeOver-hint');
         if (overHint) {
           overHint.textContent = config.freeDeliveryOver > 0
-            ? `Orders from ${cities} above this basket value get free delivery.`
+            ? `Orders from ${cities} above this basket value get free shipping.`
             : 'Set to 0 to always charge delivery.';
         }
       };
@@ -457,9 +464,9 @@
         const config = JSON.parse(JSON.stringify(Store.state.shipping));
         NUMERIC.forEach(key => { config[key] = Math.max(0, Number(document.querySelector('#sf-' + key).value) || 0); });
         BANK.forEach(key => { config.bankDetails[key] = document.querySelector('#sf-' + key).value.trim(); });
-        config.supportEmail = document.querySelector('#sf-supportEmail').value.trim();
-        config.supportPhone = document.querySelector('#sf-supportPhone').value.trim();
-        config.whatsappNumber = document.querySelector('#sf-whatsappNumber').value.trim();
+        config.supportEmail = 'solids.pk.official@gmail.com';
+        config.supportPhone = '+92 341 2782443';
+        config.whatsappNumber = '923412782443';
         config.instagramUrl = document.querySelector('#sf-instagramUrl').value.trim();
         config.localCities = document.querySelector('#sf-localCities').value
           .split('\n').map(line => line.trim()).filter(Boolean);

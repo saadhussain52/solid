@@ -56,7 +56,7 @@
   <header class="site-header">
     <nav class="desktop-nav"><a href="index.html">Home</a><a href="all.html">Shop</a></nav>
     <a class="wordmark" href="index.html" aria-label="Solids home"><img class="brand-logo" src="solids-logo-thread-black.png" alt="Solids — No prints, just style"></a>
-    <div class="header-actions"><a class="header-link" href="all.html">Shop</a><a class="header-link" href="mailto:solid.pk.official@gmail.com">Contact</a></div>
+    <div class="header-actions"><a class="header-link" href="all.html">Shop</a><a class="header-link" href="mailto:solids.pk.official@gmail.com">Contact</a></div>
   </header>
 
   <main class="track-page">
@@ -177,7 +177,7 @@
         host.innerHTML = `
           <div class="track-empty"><p>We found ${orders.length} orders on <strong>${escapeHtml(query)}</strong>. Pick the one you want to track:</p></div>
           <div class="track-picks">${rows}</div>
-          <p class="track-hint">If none of these look right, <a href="mailto:solid.pk.official@gmail.com">email the studio</a> and we will check by hand.</p>`;
+          <p class="track-hint">If none of these look right, <a href="mailto:solids.pk.official@gmail.com">email the studio</a> and we will check by hand.</p>`;
         /* Clicking a row opens that order through the normal result view, so
            there is only ever one rendering of an order on this page. */
         host.querySelectorAll('.track-pick').forEach(button => {
@@ -203,7 +203,7 @@
       const render = order => {
         const host = document.querySelector('#track-result');
         if (!order) {
-          host.innerHTML = `<div class="track-empty"><p>We could not find an order with that reference. Check the order number on your confirmation screen, or <a href="mailto:solid.pk.official@gmail.com">email the studio</a> and we will look it up for you.</p></div>`;
+          host.innerHTML = `<div class="track-empty"><p>We could not find an order with that reference. Check the order number on your confirmation screen, or <a href="mailto:solids.pk.official@gmail.com">email the studio</a> and we will look it up for you.</p></div>`;
           return;
         }
 
@@ -227,7 +227,7 @@
         const deliveryFee = quote.waived ? 'Free' : money(quote.baseFee != null ? quote.baseFee : (quote.delivery || 0));
 
         const cancelNote = cancelled
-          ? `<div class="track-empty"><p><strong>This order was cancelled.</strong> Nothing further will be shipped and no payment is due. If you were charged, the studio will refund it — <a href="mailto:solid.pk.official@gmail.com">email us</a> with the order number and we will sort it out.</p></div>`
+          ? `<div class="track-empty"><p><strong>This order was cancelled.</strong> Nothing further will be shipped and no payment is due. If you were charged, the studio will refund it — <a href="mailto:solids.pk.official@gmail.com">email us</a> with the order number and we will sort it out.</p></div>`
           : '';
 
         host.innerHTML = `
@@ -251,7 +251,7 @@
             <div><span><strong>Total</strong></span><em><strong>${money(Store.orderTotal(order))}</strong></em></div>
           </div>
 
-          <p class="track-hint">Questions about this order? Write to <a href="mailto:solid.pk.official@gmail.com">solid.pk.official@gmail.com</a> with your order number and we will pick it up from there.</p>`;
+          <p class="track-hint">Questions about this order? Write to <a href="mailto:solids.pk.official@gmail.com">solids.pk.official@gmail.com</a> with your order number and we will pick it up from there.</p>`;
       };
 
       /* Pre-fill from ?id= so the confirmation screen's "Track this order"

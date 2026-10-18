@@ -223,6 +223,9 @@
     product.image = await upload(product.image);
     product.gallery = await Promise.all((product.gallery || []).map(upload));
     product.sizeChart = await upload(product.sizeChart);
+    if (product.sizeCharts && typeof product.sizeCharts === 'object') {
+      for (const chart of Object.values(product.sizeCharts)) if (chart && typeof chart === 'object') chart.image = await upload(chart.image);
+    }
     for (const field of ['colorImages', 'colorMasks']) {
       const images = product[field] || {};
       for (const key of Object.keys(images)) {
@@ -329,25 +332,12 @@
 
           <section class="editor-section editor-chart">
             <h4 class="editor-section-title"><span>04</span> Size chart &amp; measurements</h4>
-            <label>Size chart image (optional)
-              <span class="size-chart-editor" data-size-chart>
-                <img data-size-chart-preview${product && product.sizeChart ? ` src="${escapeAttr(product.sizeChart)}"` : ''} alt="Size chart preview"${product && product.sizeChart ? '' : ' hidden'}>
-                <button type="button" class="button button-small" data-upload-size-chart>${product && product.sizeChart ? 'Replace image' : 'Upload image'}</button>
-                <button type="button" class="button button-small ghost" data-remove-size-chart${product && product.sizeChart ? '' : ' hidden'}>Remove</button>
-              </span>
-            </label>
-            <div class="size-chart-table-editor" data-size-chart-table>
-              <div class="size-chart-table-head">
-                <strong>Size chart measurements</strong>
-                <span class="editor-hint">Enter measurements by size. Use the row label for S, M, L, XL and columns for Chest, Length, Shoulder, Hip, etc.</span>
-              </div>
-              <strong class="chart-fields-title">Measurement columns</strong>
-              <div class="size-chart-columns" data-size-chart-columns></div>
-              <button type="button" class="button button-small ghost" data-add-chart-column>Add column</button>
-              <strong class="chart-fields-title chart-rows-title">Rows by size</strong>
-              <div class="size-chart-rows" data-size-chart-rows></div>
-              <button type="button" class="button button-small ghost" data-add-chart-row>Add row</button>
-            </div>
+            <label>Chart applies to<select data-size-chart-type>
+              <option value="set">Complete set (shirt + trouser)</option>
+              <option value="shirt">Shirt only</option>
+              <option value="trouser">Trouser / pant only</option>
+            </select></label>
+            <div class="size-chart-parts" data-size-chart-parts></div>
           </section>
         </div>
       </form>`;
@@ -561,66 +551,83 @@
       paintFitMatrix();
     });
     const skuInput = $('[data-field="sku"]', modal);
-    const chartImage = $('[data-size-chart-preview]', modal);
-    let sizeChart = product && product.sizeChart || '';
-    /* Size chart as a typed table: columns are the measurement points
-       (Chest, Length, Shoulder…) and rows are the sizes. It renders as a real
-       table on the product page so shoppers can read it without a picture. */
-    const chartColumnsHost = $('[data-size-chart-columns]', modal);
-    const chartRowsHost = $('[data-size-chart-rows]', modal);
-    const readSavedChartTable = () => {
-      const table = product && product.sizeChartTable;
-      const columns = table && Array.isArray(table.columns) ? table.columns.filter(column => typeof column === 'string') : [];
-      const rows = table && Array.isArray(table.rows)
-        ? table.rows.map(row => ({
-          size: row && row.size != null ? String(row.size) : '',
-          values: row && Array.isArray(row.values) ? row.values.map(value => (value == null ? '' : String(value))) : []
-        }))
-        : [];
-      return { columns, rows };
+    const chartHost = $('[data-size-chart-parts]', modal);
+    const chartKinds = {
+      shirt: { title: 'Shirt size chart', columns: ['Size', 'Shoulder', 'Bust', 'Hip', 'Length'] },
+      trouser: { title: 'Trouser / pant size chart', columns: ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'] }
     };
-    let chartTable = readSavedChartTable();
-    if (!chartTable.columns.length) chartTable.columns = ['Size', 'Chest', 'Length', 'Shoulder'];
-    if (!chartTable.rows.length) chartTable.rows = [{ size: '', values: ['', '', ''] }];
-    const readChartTable = () => ({
-      columns: $$('[data-chart-column]', chartColumnsHost).map(input => input.value.trim()),
-      rows: $$('[data-chart-row]', chartRowsHost).map(row => ({
-        size: ($('[data-chart-size]', row) || {}).value ? $('[data-chart-size]', row).value.trim() : '',
-        values: $$('[data-chart-value]', row).map(input => input.value.trim())
-      }))
+    const legacyTable = product && product.sizeChartTable;
+    const savedCharts = product && product.sizeCharts && typeof product.sizeCharts === 'object' ? product.sizeCharts : {};
+    let chartType = ['set', 'shirt', 'trouser'].includes(product && product.sizeChartType) ? product.sizeChartType : 'set';
+    const chartState = {};
+    Object.keys(chartKinds).forEach(kind => {
+      const saved = savedCharts[kind] || {};
+      const table = saved.table || (kind === 'shirt' ? legacyTable : null);
+      const defaultColumns = chartKinds[kind].columns;
+      const savedColumns = table && Array.isArray(table.columns) ? table.columns.map(String) : [];
+      const columns = savedColumns.length > 1 && savedColumns.slice(1).map(value => value.toLowerCase()).join('|') === defaultColumns.slice(1).map(value => value.toLowerCase()).join('|')
+        ? defaultColumns.slice() : (savedColumns.length ? savedColumns : defaultColumns.slice());
+      chartState[kind] = {
+        image: saved.image || (kind === 'shirt' ? (product && product.sizeChart || '') : ''),
+        table: table && Array.isArray(table.columns) ? {
+          columns,
+          rows: (table.rows || []).map(row => ({ size: String(row.size || ''), values: (row.values || []).map(value => String(value == null ? '' : value)) }))
+        } : { columns: chartKinds[kind].columns.slice(), rows: [{ size: '', values: ['', '', '', ''] }] }
+      };
+      if (!chartState[kind].table.rows.length) chartState[kind].table.rows = [{ size: '', values: ['', '', '', ''] }];
     });
-    const paintChartTable = () => {
-      const columnCount = Math.max(1, chartTable.columns.length - 1);
-      chartColumnsHost.innerHTML = chartTable.columns.map((column, index) => `
-        <span class="size-chart-column">
-          <input data-chart-column value="${escapeHtml(column)}" placeholder="${index === 0 ? 'Size' : 'Measurement'}">
-          ${index === 0 ? '' : `<button type="button" class="row-danger" data-remove-chart-column="${index}" aria-label="Remove column">×</button>`}
-        </span>`).join('');
-      chartRowsHost.innerHTML = chartTable.rows.map((row, rowIndex) => `
-        <div class="size-chart-row" data-chart-row="${rowIndex}">
-          <input data-chart-size value="${escapeHtml(row.size)}" placeholder="Size label">
-          ${Array.from({ length: columnCount }).map((_, valueIndex) =>
-            `<label class="chart-measurement-field"><span>${escapeHtml(chartTable.columns[valueIndex + 1] || 'Measurement')}</span><input data-chart-value value="${escapeHtml(row.values[valueIndex] || '')}" placeholder="—"></label>`).join('')}
-          <button type="button" class="row-danger" data-remove-chart-row="${rowIndex}" aria-label="Remove row">×</button>
-        </div>`).join('');
+    const renderChartPart = kind => {
+      const config = chartKinds[kind], state = chartState[kind], table = state.table;
+      return `<section class="size-chart-part" data-chart-part="${kind}"><h5>${config.title}</h5>
+        <div class="size-chart-editor"><img data-chart-preview${state.image ? ` src="${escapeAttr(state.image)}"` : ''} alt="${config.title} preview"${state.image ? '' : ' hidden'}>
+          <button type="button" class="button button-small" data-chart-upload>${state.image ? 'Replace image' : 'Upload image'}</button>
+          <button type="button" class="button button-small ghost" data-chart-remove${state.image ? '' : ' hidden'}>Remove</button></div>
+        <p class="editor-hint">Required columns: ${config.columns.join(', ')}. Add measurement rows by size.</p>
+        <div class="size-chart-columns" data-chart-columns>${table.columns.map((column, index) => `<span class="size-chart-column"><input data-chart-column value="${escapeAttr(column)}"${index === 0 ? ' readonly' : ''}>${index === 0 ? '' : `<button type="button" class="row-danger" data-chart-remove-column="${index}" aria-label="Remove column">×</button>`}</span>`).join('')}</div>
+        <button type="button" class="button button-small ghost" data-chart-add-column>Add column</button>
+        <div class="size-chart-rows" data-chart-rows>${table.rows.map((row, rowIndex) => `<div class="size-chart-row" data-chart-row="${rowIndex}"><input data-chart-size value="${escapeAttr(row.size)}" placeholder="Size label">${Array.from({length:Math.max(0,table.columns.length-1)},(_,i)=>`<label class="chart-measurement-field"><span>${escapeHtml(table.columns[i+1]||'Measurement')}</span><input data-chart-value value="${escapeAttr(row.values[i]||'')}"></label>`).join('')}<button type="button" class="row-danger" data-chart-remove-row="${rowIndex}" aria-label="Remove row">×</button></div>`).join('')}</div>
+        <button type="button" class="button button-small ghost" data-chart-add-row>Add measurement row</button></section>`;
     };
-    paintChartTable();
-    const syncChartTable = () => {
-      const next = readChartTable();
-      next.columns = next.columns.length ? next.columns : ['Size'];
-      // Keep blank rows in the working model — the admin may be mid-typing.
-      // Empty rows are only dropped when the product is saved.
-      if (!next.rows.length) next.rows = [{ size: '', values: [] }];
-      chartTable = next;
+    const paintCharts = () => { chartHost.innerHTML = (chartType === 'set' ? ['shirt','trouser'] : [chartType]).map(renderChartPart).join(''); };
+    const syncChartPart = kind => {
+      const host = $(`[data-chart-part="${kind}"]`, chartHost);
+      if (!host) return;
+      const columns = host._columns || $$('[data-chart-column]', host).map((input, index) => index === 0 ? 'Size' : input.value.trim());
+      const rows = host._rows || $$('[data-chart-row]', host).map(row => ({ size: $('[data-chart-size]', row).value.trim(), values: $$('[data-chart-value]', row).map(input => input.value.trim()) }));
+      chartState[kind].table = { columns, rows: rows.length ? rows : [{ size: '', values: columns.slice(1).map(() => '') }] };
     };
-    // Trailing/blank rows carry no data, so strip them right before saving.
-    const trimmedChartTable = () => {
-      const columns = chartTable.columns.length ? chartTable.columns.slice() : ['Size'];
-      const rows = chartTable.rows
-        .filter(row => row.size || row.values.some(Boolean))
-        .map(row => ({ size: row.size, values: row.values.slice(0, Math.max(0, columns.length - 1)) }));
-      return { columns, rows };
+    const trimmedCharts = () => {
+      Object.keys(chartKinds).forEach(syncChartPart);
+      return Object.fromEntries(Object.keys(chartKinds).map(kind => [kind, {
+        image: chartState[kind].image,
+        table: { columns: chartState[kind].table.columns.slice(), rows: chartState[kind].table.rows.filter(row => row.size || row.values.some(Boolean)).map(row => ({ size: row.size, values: row.values.slice() })) }
+      }]));
     };
+    $('[data-size-chart-type]', modal).value = chartType;
+    paintCharts();
+    $('[data-size-chart-type]', modal).addEventListener('change', event => { Object.keys(chartKinds).forEach(syncChartPart); chartType = event.target.value; paintCharts(); });
+    chartHost.addEventListener('input', event => {
+      const part = event.target.closest('[data-chart-part]'); if (!part) return;
+      const kind = part.dataset.chartPart;
+      part._columns = $$('[data-chart-column]', part).map((input, index) => index === 0 ? 'Size' : input.value.trim());
+      part._rows = $$('[data-chart-row]', part).map(row => ({ size: $('[data-chart-size]', row).value.trim(), values: $$('[data-chart-value]', row).map(input => input.value.trim()) }));
+      syncChartPart(kind);
+    });
+    chartHost.addEventListener('click', event => {
+      const part = event.target.closest('[data-chart-part]'); if (!part) return;
+      const kind = part.dataset.chartPart;
+      if (event.target.closest('[data-chart-upload]')) {
+        const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+        input.onchange = async () => { const file = input.files && input.files[0]; if (!file || !file.type.startsWith('image/')) return; chartState[kind].image = await readImage(file); const preview = $('[data-chart-preview]', part); preview.src = chartState[kind].image; preview.hidden = false; $('[data-chart-remove]', part).hidden = false; $('[data-chart-upload]', part).textContent = 'Replace image'; };
+        input.click(); return;
+      }
+      if (event.target.closest('[data-chart-remove]')) { chartState[kind].image = ''; $('[data-chart-preview]', part).hidden = true; $('[data-chart-preview]', part).removeAttribute('src'); $('[data-chart-remove]', part).hidden = true; $('[data-chart-upload]', part).textContent = 'Upload image'; return; }
+      syncChartPart(kind);
+      if (event.target.closest('[data-chart-add-row]')) { chartState[kind].table.rows.push({ size:'', values:chartState[kind].table.columns.slice(1).map(()=> '') }); paintCharts(); return; }
+      if (event.target.closest('[data-chart-remove-row]')) { chartState[kind].table.rows.splice(Number(event.target.closest('[data-chart-remove-row]').dataset.chartRemoveRow),1); if (!chartState[kind].table.rows.length) chartState[kind].table.rows.push({size:'',values:chartState[kind].table.columns.slice(1).map(()=> '')}); paintCharts(); return; }
+      if (event.target.closest('[data-chart-add-column]')) { chartState[kind].table.columns.push(''); chartState[kind].table.rows.forEach(row=>row.values.push('')); paintCharts(); return; }
+      if (event.target.closest('[data-chart-remove-column]')) { const index=Number(event.target.closest('[data-chart-remove-column]').dataset.chartRemoveColumn); chartState[kind].table.columns.splice(index,1); chartState[kind].table.rows.forEach(row=>row.values.splice(index-1,1)); paintCharts(); }
+    });
     const updateFitStatus = () => {
       const status = $('[data-editor-stock-status]', modal);
       if (!status) return;
@@ -628,47 +635,6 @@
       status.textContent = `${total > 0 ? (total <= 10 ? 'Low stock' : 'In stock') : 'Sold out'} · ${total} sets`;
       status.className = 'status ' + (total <= 10 ? 'low-stock' : 'in-stock');
     };
-    chartColumnsHost.addEventListener('input', syncChartTable);
-    chartRowsHost.addEventListener('input', syncChartTable);
-    chartColumnsHost.addEventListener('click', event => {
-      const remove = event.target.closest('[data-remove-chart-column]');
-      if (!remove) return;
-      syncChartTable();
-      const index = Number(remove.dataset.removeChartColumn);
-      if (index <= 0 || index >= chartTable.columns.length) return;
-      chartTable.columns.splice(index, 1);
-      chartTable.rows.forEach(row => row.values.splice(index - 1, 1));
-      paintChartTable();
-      syncChartTable();
-    });
-    chartRowsHost.addEventListener('click', event => {
-      const remove = event.target.closest('[data-remove-chart-row]');
-      if (!remove) return;
-      syncChartTable();
-      const index = Number(remove.dataset.removeChartRow);
-      if (index < 0 || index >= chartTable.rows.length) return;
-      chartTable.rows.splice(index, 1);
-      if (!chartTable.rows.length) chartTable.rows = [{ size: '', values: [] }];
-      paintChartTable();
-      syncChartTable();
-    });
-    $('[data-add-chart-column]', modal).addEventListener('click', () => {
-      syncChartTable();
-      chartTable.columns.push('');
-      chartTable.rows.forEach(row => row.values.push(''));
-      paintChartTable();
-      syncChartTable();
-      const inputs = $$('[data-chart-column]', chartColumnsHost);
-      inputs[inputs.length - 1]?.focus();
-    });
-    $('[data-add-chart-row]', modal).addEventListener('click', () => {
-      syncChartTable();
-      chartTable.rows.push({ size: '', values: chartTable.columns.slice(1).map(() => '') });
-      paintChartTable();
-      syncChartTable();
-      const rows = $$('[data-chart-size]', chartRowsHost);
-      rows[rows.length - 1]?.focus();
-    });
     const paintColors = () => {
       colorRowsHost.innerHTML = colorEntries.map((entry, rowIndex) => `
         <div class="color-editor-row" data-color-row="${rowIndex}">
@@ -695,28 +661,6 @@
     paintColors();
 
     modal.classList.add('fit-options-active');
-    $('[data-upload-size-chart]', modal).addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async () => {
-        const file = input.files && input.files[0];
-        if (!file || !file.type.startsWith('image/')) return;
-        sizeChart = await readImage(file);
-        chartImage.src = sizeChart;
-        chartImage.hidden = false;
-        $('[data-remove-size-chart]', modal).hidden = false;
-        $('[data-upload-size-chart]', modal).textContent = 'Replace chart';
-      };
-      input.click();
-    });
-    $('[data-remove-size-chart]', modal).addEventListener('click', () => {
-      sizeChart = '';
-      chartImage.removeAttribute('src');
-      chartImage.hidden = true;
-      $('[data-remove-size-chart]', modal).hidden = true;
-      $('[data-upload-size-chart]', modal).textContent = 'Upload chart';
-    });
 
     $('[data-add-color]', modal).addEventListener('click', () => {
       const initialSizes = sizes.map(size => Object.assign({}, size, {
@@ -886,8 +830,10 @@
         colorVariants,
         image,
         gallery: allPictures,
-        sizeChart,
-        sizeChartTable: trimmedChartTable(),
+        sizeChartType: chartType,
+        sizeCharts: trimmedCharts(),
+        sizeChart: chartState.shirt.image || chartState.trouser.image || '',
+        sizeChartTable: chartState.shirt.table,
         splitImageView: $('[data-split-images]', modal).checked,
         colorImages,
         colorMasks: index >= 0 ? Store.state.products[index].colorMasks : {},

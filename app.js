@@ -1111,16 +1111,26 @@
       }
       const mediaLinks = document.createElement('div');
       mediaLinks.className = 'product-detail-links';
-      const chartTable = product.sizeChartTable && Array.isArray(product.sizeChartTable.columns) && product.sizeChartTable.columns.length > 1
-        && Array.isArray(product.sizeChartTable.rows) && product.sizeChartTable.rows.length
-        ? product.sizeChartTable
-        : null;
-      const sizeChartButton = (product.sizeChart || chartTable)
+      const sizeChartType = ['set', 'shirt', 'trouser'].includes(product.sizeChartType) ? product.sizeChartType : 'set';
+      const legacyTable = product.sizeChartTable && Array.isArray(product.sizeChartTable.columns) && Array.isArray(product.sizeChartTable.rows)
+        ? product.sizeChartTable : null;
+      const sizeCharts = product.sizeCharts && typeof product.sizeCharts === 'object' ? product.sizeCharts : {};
+      const chartParts = (sizeChartType === 'set' ? ['shirt', 'trouser'] : [sizeChartType]).map(kind => {
+        const saved = sizeCharts[kind] || {};
+        const table = saved.table || (kind === 'shirt' ? legacyTable : null);
+        const image = saved.image || (kind === 'shirt' ? product.sizeChart : '');
+        const columns = kind === 'shirt' ? ['Size', 'Shoulder', 'Bust', 'Hip', 'Length'] : ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'];
+        return { kind, title: kind === 'shirt' ? 'Shirt' : 'Trouser / pant', image, table: table && table.columns && table.rows ? table : { columns, rows: [] } };
+      });
+      const hasChart = chartParts.some(part => part.image || (part.table.rows && part.table.rows.length));
+      const sizeChartButton = hasChart
         ? `<button type="button" data-open-size-chart>Size chart</button>`
         : '';
-      mediaLinks.innerHTML = `${sizeChartButton}<a href="shipping.html">Delivery &amp; Returns</a>`;
-      const productActions = document.querySelector('.product-actions');
-      if (productActions) productActions.insertAdjacentElement('beforebegin', mediaLinks);
+      mediaLinks.innerHTML = `<a href="shipping.html">Delivery &amp; Returns</a>`;
+      const sizeLabelAnchor = fitOptionsEnabled ? fitHost : document.querySelector('.size-options');
+      if (sizeChartButton) mediaLinks.insertAdjacentHTML('afterbegin', sizeChartButton);
+      if (sizeLabelAnchor) sizeLabelAnchor.insertAdjacentElement('afterend', mediaLinks);
+      else document.querySelector('.product-actions')?.insertAdjacentElement('beforebegin', mediaLinks);
       const splitImageHost = document.createElement('div');
       splitImageHost.className = 'product-split-images';
       splitImageHost.hidden = true;
@@ -1151,24 +1161,16 @@
       sizeChartPanel.setAttribute('aria-modal', 'true');
       sizeChartPanel.setAttribute('aria-label', product.name + ' size chart');
       sizeChartPanel.hidden = true;
-      if (chartTable && !product.sizeChart) {
-        const head = chartTable.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('');
-        const body = chartTable.rows.map(row => {
-          const cells = chartTable.columns.slice(1).map((_, index) => `<td>${escapeHtml(row.values[index] || '—')}</td>`).join('');
-          return `<tr><th scope="row">${escapeHtml(row.size)}</th>${cells}</tr>`;
-        }).join('');
-        sizeChartPanel.innerHTML = '<div class="product-size-chart-inner">'
-          + '<button type="button" class="product-size-chart-close" data-close-size-chart aria-label="Close size chart">×</button>'
-          + '<h3>Size chart</h3>'
-          + `<table class="size-chart-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
-          + '</div>';
-      } else if (product.sizeChart) {
-        sizeChartPanel.innerHTML = '<div class="product-size-chart-inner">'
-          + '<button type="button" class="product-size-chart-close" data-close-size-chart aria-label="Close size chart">×</button>'
-          + '<h3>Size chart</h3>'
-          + `<img class="product-size-chart-image" src="${escapeAttr(product.sizeChart)}" alt="${escapeAttr(product.name)} size chart">`
-          + '</div>';
-      }
+      const renderChartPart = part => {
+        const chart = part.table;
+        const table = chart && chart.columns && chart.rows && chart.rows.length
+          ? `<div class="size-chart-table-wrap"><table class="size-chart-table"><thead><tr>${chart.columns.map(column => `<th scope="col">${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${chart.rows.map(row => `<tr><th scope="row">${escapeHtml(row.size || '—')}</th>${chart.columns.slice(1).map((_, index) => `<td>${escapeHtml(row.values[index] || '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
+        const image = part.image ? `<img class="product-size-chart-image" src="${escapeAttr(part.image)}" alt="${escapeAttr(product.name)} ${escapeAttr(part.title)} size chart">` : '';
+        return `<section class="product-size-chart-part"><h4>${escapeHtml(part.title)} measurements</h4>${table}${image}${!table && !image ? '<p>Size measurements are not available yet.</p>' : ''}</section>`;
+      };
+      sizeChartPanel.innerHTML = '<div class="product-size-chart-inner">'
+        + '<button type="button" class="product-size-chart-close" data-close-size-chart aria-label="Close size chart">×</button>'
+        + '<h3>Size chart</h3>' + chartParts.map(renderChartPart).join('') + '</div>';
       const openSizeChart = () => {
         sizeChartPanel.hidden = false;
         document.body.classList.add('size-chart-open');
@@ -1178,7 +1180,7 @@
         sizeChartPanel.hidden = true;
         document.body.classList.remove('size-chart-open');
       };
-      if (chartTable || product.sizeChart) {
+      if (hasChart) {
         document.body.appendChild(sizeChartPanel);
         sizeChartPanel.querySelector('[data-close-size-chart]').addEventListener('click', closeSizeChart);
         sizeChartPanel.addEventListener('click', event => { if (event.target === sizeChartPanel) closeSizeChart(); });

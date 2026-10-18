@@ -54,7 +54,12 @@ const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Solids <onboarding@resend.dev>';
 /* Where the order alert goes. Optional. */
-const STUDIO_EMAIL = process.env.STUDIO_EMAIL || 'solid.pk.official@gmail.com';
+const STUDIO_EMAIL = process.env.STUDIO_EMAIL || 'saadhussain3536@gmail.com';
+const STUDIO_WHATSAPP = process.env.STUDIO_WHATSAPP || '03306253428';
+const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || '';
+const WHATSAPP_TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en_US';
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
@@ -110,6 +115,20 @@ const unifiedFitGroups = [
 
 const normalizeStoredProductSizing = product => {
   if (!product || typeof product !== 'object') return product;
+  product.sizeChartType = ['set', 'shirt', 'trouser'].includes(product.sizeChartType) ? product.sizeChartType : 'set';
+  const legacySizeChart = typeof product.sizeChart === 'string' ? product.sizeChart : '';
+  const legacySizeChartTable = product.sizeChartTable && typeof product.sizeChartTable === 'object' ? product.sizeChartTable : { columns: [], rows: [] };
+  const charts = product.sizeCharts && typeof product.sizeCharts === 'object' ? product.sizeCharts : {};
+  product.sizeCharts = {
+    shirt: charts.shirt && typeof charts.shirt === 'object' ? charts.shirt : { image: legacySizeChart, table: legacySizeChartTable },
+    trouser: charts.trouser && typeof charts.trouser === 'object' ? charts.trouser : { image: '', table: { columns: ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'], rows: [] } }
+  };
+  for (const [kind, columns] of Object.entries({ shirt: ['Size', 'Shoulder', 'Bust', 'Hip', 'Length'], trouser: ['Size', 'Hip', 'Thigh', 'Bottom', 'Length'] })) {
+    const chart = product.sizeCharts[kind];
+    if (!chart.table || !Array.isArray(chart.table.columns)) chart.table = { columns, rows: [] };
+    else if (chart.table.columns.length > 1 && chart.table.columns.length === columns.length
+      && chart.table.columns.slice(1).map(value => String(value).toLowerCase()).join('|') === columns.slice(1).map(value => value.toLowerCase()).join('|')) chart.table.columns = columns;
+  }
   const oldGroups = Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
   const oldVariants = Array.isArray(product.fitVariants) ? product.fitVariants : [];
   const fitGroups = unifiedFitGroups.map((group, index) => {
@@ -567,6 +586,8 @@ const buildCustomerEmail = (order, req) => {
     (quote.label || 'Delivery charges') + ': ' + charge,
     'Total:    ' + money(total),
     '',
+    "Once your order is placed, your Tracking ID and Order ID will be automatically sent to your WhatsApp number and Email. To track your parcel, navigate to our website footer, click 'Track Your Order', and enter your Tracking ID to view real-time shipping status.",
+    '',
     'Track your parcel any time — the link below works on any device, and you can look it up with your email address too:',
     trackUrl,
     '',
@@ -626,6 +647,7 @@ const buildStudioEmail = (order, req) => {
     'New order from the storefront.',
     '',
     order.id + '  —  ' + (order.customer || ''),
+    'Tracking ID: ' + order.trackingId,
     'Email:  ' + (order.email || ''),
     'Phone:  ' + (order.phone || '—'),
     'City:   ' + (order.city || '—'),
@@ -646,7 +668,8 @@ const buildStudioEmail = (order, req) => {
     escapeHtml(order.city || '') + '</p>',
     '<p style="font-size:13px;color:#55504a;margin:0 0 4px">' + escapeHtml(order.email || '') +
     (order.phone ? ' · ' + escapeHtml(order.phone) : '') + '</p>',
-    '<p style="font-size:13px;color:#55504a;margin:0 0 16px">' + escapeHtml(items) + '</p>',
+    '<p style="font-size:13px;color:#55504a;margin:0 0 8px">' + escapeHtml(items) + '</p>',
+    '<p style="font-size:13px;margin:0 0 16px"><strong>Tracking ID:</strong> ' + escapeHtml(order.trackingId) + '</p>',
     '<p style="font-size:16px;margin:0 0 20px"><strong>Total ' + escapeHtml(money(Number(order.total) || 0)) + '</strong></p>',
     '<p style="margin:0"><a href="' + escapeAttr(siteUrl('/orders.html', req)) +
     '" style="display:inline-block;background:#292827;color:#fff;padding:12px 20px;text-decoration:none;font-size:12px;letter-spacing:1px">OPEN DASHBOARD</a></p>',
@@ -829,6 +852,31 @@ const mailStudio = async (order, req) => {
   }
 };
 
+/* WhatsApp Cloud API needs credentials and an approved template for business
+   initiated order alerts. Keep the recipient and all credentials server-side. */
+const whatsappStudio = async order => {
+  if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID || !WHATSAPP_TEMPLATE_NAME) {
+    return { sent: false, reason: 'whatsapp-not-configured' };
+  }
+  const recipient = String(STUDIO_WHATSAPP).replace(/\D/g, '');
+  const response = await fetch('https://graph.facebook.com/v21.0/' + encodeURIComponent(WHATSAPP_PHONE_NUMBER_ID) + '/messages', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + WHATSAPP_ACCESS_TOKEN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp', to: recipient, type: 'template',
+      template: { name: WHATSAPP_TEMPLATE_NAME, language: { code: WHATSAPP_TEMPLATE_LANGUAGE },
+        components: [{ type: 'body', parameters: [
+          { type: 'text', text: String(order.id) },
+          { type: 'text', text: String(order.trackingId) },
+          { type: 'text', text: String(order.customer || 'Customer') },
+          { type: 'text', text: String(order.phone || '—') }
+        ] }] }
+    })
+  });
+  if (!response.ok) throw new Error('WhatsApp Cloud API ' + response.status + ': ' + (await response.text()).slice(0, 200));
+  return { sent: true };
+};
+
 /* Minimal brake on the tracking endpoint. The tracking ID is long and random,
    so this only stops a script hammering it — it is not real authentication. */
 const attempts = new Map();
@@ -984,12 +1032,19 @@ const handleCreate = async (req, res) => {
   /* Saved first, emailed second — a mail outage must never lose the order. */
   const mail = await mailCustomer(order, req);
   await mailStudio(order, req);
+  try {
+    const whatsapp = await whatsappStudio(order);
+    if (!whatsapp.sent && whatsapp.reason === 'whatsapp-not-configured') console.info('[whatsapp] not sent: Cloud API environment is not configured');
+  } catch (error) {
+    console.error('[whatsapp] studio alert failed for ' + order.id + ':', error.message);
+  }
 
   return json(res, 201, {
     ok: true,
     order: publicOrder(order),
     emailSent: mail.emailSent,
     mailError: mail.mailError || null,
+    whatsappDispatchConfigured: Boolean(WHATSAPP_ACCESS_TOKEN && WHATSAPP_PHONE_NUMBER_ID && WHATSAPP_TEMPLATE_NAME),
     trackUrl: mail.trackUrl
   });
 };
@@ -1404,6 +1459,8 @@ server.listen(PORT, () => {
   } else {
     console.log('  emails: OFF - set RESEND_API_KEY in .env to send tracking links.');
   }
+  if (WHATSAPP_ACCESS_TOKEN && WHATSAPP_PHONE_NUMBER_ID && WHATSAPP_TEMPLATE_NAME) console.log('  WhatsApp order alerts: configured');
+  else console.log('  WhatsApp order alerts: OFF - configure WhatsApp Cloud API credentials and approved template');
   if (!adminCredentialsReady) {
     console.log('  admin panel: locked (set ADMIN_USERNAME and ADMIN_PASSWORD to unlock)');
   }
