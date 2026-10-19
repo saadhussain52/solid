@@ -838,7 +838,6 @@ const mailCustomer = async (order, req) => {
     }
     const result = await sendMail({
       to: order.email,
-      bcc: 'solids.pk.official@gmail.com',
       subject: 'Your Solids order ' + order.id + ' — tracking details',
       text: mail.lines,
       html: mail.html
@@ -847,6 +846,91 @@ const mailCustomer = async (order, req) => {
   } catch (error) {
     console.error('[mail] Brevo confirmation failed for ' + order.id + ':', error);
     return { emailSent: false, mailError: error.message, trackUrl: mail.trackUrl };
+  }
+};
+
+/* Send a separate operations alert so the customer's receipt stays private
+   and the store inbox gets a concise order-processing view. */
+const mailAdminNewOrder = async (order, req) => {
+  const quote = order.shipping || {};
+  const total = Number(order.total) || 0;
+  const shippingCharge = quote.waived ? 'Free' : money(quote.delivery || 0);
+  const dashboardUrl = siteUrl('/orders.html', req);
+  const itemRows = (order.items || []).map(item => {
+    const values = [
+      itemOptionText(item),
+      itemColourText(item) ? 'Colour: ' + itemColourText(item) : ''
+    ].filter(Boolean);
+    const description = [item.name, ...values].join(' · ');
+    const quantity = Number(item.qty) || 0;
+    const price = Number(item.price) || 0;
+    return {
+      text: '  - ' + description + ' × ' + quantity + ' — ' + money(price * quantity),
+      html: '<tr>' +
+        '<td style="padding:10px 8px;border-bottom:1px solid #e8e5df;font-size:13px">' + escapeHtml(item.name) +
+          (values.length ? '<br><span style="color:#716c64;font-size:12px">' + escapeHtml(values.join(' · ')) + '</span>' : '') +
+        '</td>' +
+        '<td style="padding:10px 8px;border-bottom:1px solid #e8e5df;text-align:center;font-size:13px">' + escapeHtml(quantity) + '</td>' +
+        '<td style="padding:10px 8px;border-bottom:1px solid #e8e5df;text-align:right;font-size:13px">' + escapeHtml(money(price * quantity)) + '</td>' +
+      '</tr>'
+    };
+  });
+  const address = [order.address, order.city].filter(Boolean).join(', ');
+  const payment = /bank|online|card|transfer/i.test(String(order.payment || '')) ? 'Online' : 'COD';
+  const subject = '🚨 New Order Alert - ' + order.id + ' (' + (order.customer || 'Customer') + ')';
+  const text = [
+    'New order: ' + order.id,
+    'Customer: ' + (order.customer || ''),
+    'Phone: ' + (order.phone || ''),
+    'Shipping address: ' + (address || 'Not provided'),
+    '', 'Order summary:',
+    ...itemRows.map(row => row.text),
+    '',
+    'Subtotal: ' + money(quote.subtotal || 0),
+    (quote.label || 'Shipping charges') + ': ' + shippingCharge,
+    'Final total: ' + money(total),
+    'Payment method: ' + payment,
+    '',
+    'Manage this order: ' + dashboardUrl
+  ].join('\n');
+  const html = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:0 auto;color:#292827">',
+      '<div style="padding:22px 24px;background:#26352d;color:#fff">',
+        '<p style="margin:0 0 6px;font-size:11px;letter-spacing:2px">SOLID STORE</p>',
+        '<h1 style="margin:0;font-size:22px">New Order Alert · ' + escapeHtml(order.id) + '</h1>',
+      '</div>',
+      '<div style="padding:22px 24px;border:1px solid #e8e5df">',
+        '<h2 style="margin:0 0 12px;font-size:15px">Customer &amp; delivery</h2>',
+        '<p style="margin:5px 0;font-size:13px"><strong>Name:</strong> ' + escapeHtml(order.customer || '') + '</p>',
+        '<p style="margin:5px 0;font-size:13px"><strong>Phone:</strong> ' + escapeHtml(order.phone || '') + '</p>',
+        '<p style="margin:5px 0;font-size:13px"><strong>Shipping address:</strong> ' + escapeHtml(address || 'Not provided') + '</p>',
+        '<h2 style="margin:24px 0 10px;font-size:15px">Order summary</h2>',
+        '<table style="width:100%;border-collapse:collapse"><thead><tr>' +
+          '<th style="padding:8px;text-align:left;background:#f5f4f1;font-size:11px">ITEM / OPTIONS</th>' +
+          '<th style="padding:8px;text-align:center;background:#f5f4f1;font-size:11px">QTY</th>' +
+          '<th style="padding:8px;text-align:right;background:#f5f4f1;font-size:11px">ITEM PRICE</th>' +
+        '</tr></thead><tbody>' + itemRows.map(row => row.html).join('') + '</tbody></table>',
+        '<div style="margin:16px 0 0 auto;max-width:320px;font-size:13px">',
+          '<p style="display:flex;justify-content:space-between;margin:6px 0"><span>Subtotal</span><strong>' + escapeHtml(money(quote.subtotal || 0)) + '</strong></p>',
+          '<p style="display:flex;justify-content:space-between;margin:6px 0"><span>' + escapeHtml(quote.label || 'Shipping charges') + '</span><strong>' + escapeHtml(shippingCharge) + '</strong></p>',
+          '<p style="display:flex;justify-content:space-between;margin:10px 0;font-size:16px"><span>Final total</span><strong>' + escapeHtml(money(total)) + '</strong></p>',
+          '<p style="display:flex;justify-content:space-between;margin:6px 0"><span>Payment method</span><strong>' + payment + '</strong></p>',
+        '</div>',
+        '<p style="margin:24px 0 0"><a href="' + escapeAttr(dashboardUrl) + '" style="display:inline-block;padding:12px 18px;background:#3f6c53;color:#fff;text-decoration:none;font-size:12px;font-weight:bold">MANAGE ORDER</a></p>',
+      '</div>',
+    '</div>'
+  ].join('');
+
+  try {
+    if (!MAIL_ENABLED) {
+      console.warn('[mail] BREVO_API_KEY is not configured; admin order alert not sent:', JSON.stringify({ to: OFFICIAL_EMAIL, orderId: order.id }));
+      return { emailSent: false, reason: 'brevo-not-configured' };
+    }
+    const result = await sendMail({ to: OFFICIAL_EMAIL, subject, text, html });
+    return { emailSent: result.sent };
+  } catch (error) {
+    console.error('[mail] Brevo admin order alert failed for ' + order.id + ':', error);
+    return { emailSent: false, mailError: error.message };
   }
 };
 
@@ -1070,6 +1154,9 @@ const handleCreate = async (req, res) => {
     Promise.resolve()
       .then(() => mailCustomer(order, req))
       .catch(error => console.error('[mail] customer dispatch failed for ' + order.id + ':', error.message));
+    Promise.resolve()
+      .then(() => mailAdminNewOrder(order, req))
+      .catch(error => console.error('[mail] admin order alert dispatch failed for ' + order.id + ':', error.message));
     Promise.resolve()
       .then(() => whatsappCustomer(order))
       .catch(error => console.error('[whatsapp] customer notification failed for ' + order.id + ':', error.message));
