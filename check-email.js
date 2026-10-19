@@ -38,7 +38,7 @@ async function main() {
     auth: { user, pass }
   });
   const result = await transporter.sendMail({
-    from: 'SOLID Store <solids.pk.official@gmail.com>',
+    from: '"SOLID Store" <solids.pk.official@gmail.com>',
     to: recipient,
     subject: 'SOLID Store — Gmail SMTP test',
     text: 'Gmail SMTP is configured for SOLID Store order confirmations.'

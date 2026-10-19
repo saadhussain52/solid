@@ -633,16 +633,30 @@ const gmailTransport = MAIL_ENABLED ? nodemailer.createTransport({
 }) : null;
 const sendMail = async message => {
   if (!gmailTransport) return { sent: false, reason: 'smtp-not-configured' };
-  const result = await gmailTransport.sendMail({
-    from: 'SOLID Store <solids.pk.official@gmail.com>',
-    replyTo: MAIL_REPLY_TO,
-    to: message.to,
-    bcc: message.bcc,
-    subject: message.subject,
-    text: message.text,
-    html: message.html
-  });
-  return { sent: true, messageId: result.messageId };
+  try {
+    const result = await gmailTransport.sendMail({
+      from: '"SOLID Store" <solids.pk.official@gmail.com>',
+      replyTo: MAIL_REPLY_TO,
+      to: message.to,
+      bcc: message.bcc,
+      subject: message.subject,
+      text: message.text,
+      html: message.html
+    });
+    return { sent: true, messageId: result.messageId };
+  } catch (error) {
+    console.error('[mail] Gmail SMTP sendMail failed:', {
+      to: message.to,
+      bcc: message.bcc,
+      message: error.message,
+      code: error.code || null,
+      command: error.command || null,
+      responseCode: error.responseCode || null,
+      response: error.response || null,
+      stack: error.stack || null
+    });
+    throw error;
+  }
 };
 
 /* --------------------------------------------------------------- plumbing */
@@ -770,9 +784,7 @@ const mailCustomer = async (order, req) => {
     }
     const result = await sendMail({
       to: order.email,
-      bcc: String(order.email || '').trim().toLowerCase() === OFFICIAL_EMAIL.trim().toLowerCase()
-        ? undefined
-        : OFFICIAL_EMAIL,
+      bcc: 'solids.pk.official@gmail.com',
       subject: 'Your Solids order ' + order.id + ' — tracking details',
       text: mail.lines,
       html: mail.html
