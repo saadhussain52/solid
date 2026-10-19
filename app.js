@@ -1363,55 +1363,41 @@
       const relatedGrid = document.querySelector('#related-grid');
       if (relatedHost && relatedGrid) {
         const renderRelatedProducts = products => {
+          const source = Array.isArray(products) ? products : [];
           const currentId = product.id == null ? '' : String(product.id);
-          const findPool = source => source
+          const candidates = source
             .map((item, position) => ({ item, position }))
-            .filter(entry => (currentId
-                ? String(entry.item.id == null ? '' : entry.item.id) !== currentId
-                : entry.position !== index))
-            .sort((a, b) => {
-              const scoreA = (a.item.category === product.category ? 2 : 0) + (a.item.tag === product.tag ? 1 : 0);
-              const scoreB = (b.item.category === product.category ? 2 : 0) + (b.item.tag === product.tag ? 1 : 0);
-              return scoreB - scoreA;
-            })
-            .slice(0, 4);
-          let pool = findPool(products);
+            .filter(entry => entry.position !== index &&
+              (!currentId || String(entry.item.id == null ? '' : entry.item.id) !== currentId) &&
+              entry.item && entry.item.active !== false && entry.item.isActive !== false);
+          const sameCategory = candidates.filter(entry => entry.item.category === product.category);
+          const pool = (sameCategory.length ? sameCategory : candidates).slice(0, 4);
+          /* Even a one-product catalogue should not leave an empty section. */
+          const finalPool = pool.length ? pool : source.map((item, position) => ({ item, position })).slice(0, 4);
 
-          /* Some hosted API responses are temporarily empty while the shared
-             storefront catalogue already has products loaded. Keep the
-             recommendation section populated from that catalogue in that case. */
-          if (!pool.length && products !== Store.state.products) {
-            pool = findPool(Store.state.products);
-          }
-
-          if (!pool.length) {
+          if (!finalPool.length) {
             relatedHost.hidden = true;
             return;
           }
           relatedHost.hidden = false;
-          relatedGrid.innerHTML = pool.map(({ item, position }) => {
-            const status = Store.productStatus(item);
-            const units = Store.totalStock(item);
-            const low = units > 0 && units <= 5;
-            return `<article class="product-card${status.key === 'sold-out' ? ' is-sold-out' : ''}">
+          relatedGrid.innerHTML = finalPool.map(({ item, position }) => {
+            const image = item.image || Store.IMAGE.fallback;
+            const price = Number(item.price) || 0;
+            return `<article class="product-card related-product-card">
               <div class="product-image">
                 <a class="product-link" href="product.html?product=${position}" aria-label="View ${escapeHtml(item.name)}">
-                  <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}">
+                  <img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async">
                 </a>
                 ${wishlistButton(position)}
                 ${item.tag ? `<span class="product-badge">${escapeHtml(item.tag)}</span>` : ''}
-                ${status.key === 'sold-out' ? '<span class="sold-out-flag">Sold Out</span>' : ''}
-                ${low ? `<span class="low-stock-flag">Only ${units} left</span>` : ''}
-                <button class="quick-add" data-product="${position}"${status.key === 'sold-out' ? ' disabled' : ''}>
-                  ${status.key === 'sold-out' ? 'SOLD OUT' : 'Add to bag <span>+</span>'}
-                </button>
+                <button class="quick-add" data-product="${position}">View product <span>+</span></button>
               </div>
               <div class="product-details">
                 <div>
                   <h3><a href="product.html?product=${position}">${escapeHtml(item.name)}</a></h3>
-                  <p>Solids / ${escapeHtml(productLabel(item))}${low ? ` · ${units} left` : ''}</p>
+                  <p>Solids / ${escapeHtml(productLabel(item))}</p>
                 </div>
-                <span class="product-price">${Store.priceRangeMarkup(item)}</span>
+                <span class="product-price">${money(price)}</span>
               </div>
             </article>`;
           }).join('');
