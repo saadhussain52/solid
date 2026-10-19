@@ -13,17 +13,16 @@
  *   node server.js            -> http://localhost:5173
  *   PORT=3000 node server.js   -> http://localhost:3000
  *
- * Email is optional. Without Gmail SMTP credentials the site still works and orders are
+ * Email is optional. Without a Resend API key the site still works and orders are
  * still saved; the confirmation screen falls back to opening the customer's
  * mail app with the tracking link already filled in, exactly as before.
  *
- * Nodemailer is used only for Gmail SMTP delivery.
+ * Email delivery uses the Resend HTTPS API via Node's built-in fetch.
  */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 
 const root = __dirname;
 
@@ -52,9 +51,9 @@ const PORT = Number(process.env.PORT) || 5173;
 /* Absolute base used inside tracking links. Set this in production, e.g.
    SITE_URL=https://yourdomain.com — otherwise the request host is used. */
 const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
-const GMAIL_USER = process.env.GMAIL_USER || '';
-const GMAIL_APP_PASS = process.env.GMAIL_APP_PASS || '';
-const MAIL_ENABLED = Boolean(GMAIL_USER && GMAIL_APP_PASS);
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_FROM = process.env.RESEND_FROM || 'SOLID Store <onboarding@resend.dev>';
+const MAIL_ENABLED = Boolean(RESEND_API_KEY);
 const OFFICIAL_EMAIL = process.env.OFFICIAL_EMAIL || 'solids.pk.official@gmail.com';
 const OFFICIAL_PHONE = process.env.OFFICIAL_PHONE || '+92 341 2782443';
 const MAIL_REPLY_TO = process.env.MAIL_REPLY_TO || OFFICIAL_EMAIL;
@@ -623,31 +622,32 @@ const buildCustomerEmail = (order, req) => {
 
 const escapeAttr = value => escapeHtml(value).replace(/`/g, '&#96;');
 
-/* Gmail app-password delivery. Credentials stay server-side and are optional
-   for local development; callers handle the unconfigured case gracefully. */
-const transporter = MAIL_ENABLED ? nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASS }
-}) : null;
+/* Send email over HTTPS so deployment hosts that block outbound SMTP still
+   deliver. Missing credentials and provider errors never affect checkout. */
 const sendMail = async message => {
-  if (!transporter) return { sent: false, reason: 'smtp-not-configured' };
-  try {
-    const result = await transporter.sendMail({
-      from: '"SOLID Store" <solids.pk.official@gmail.com>',
-      replyTo: MAIL_REPLY_TO,
+  if (!RESEND_API_KEY) return { sent: false, reason: 'resend-not-configured' };
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + RESEND_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: RESEND_FROM,
+      reply_to: MAIL_REPLY_TO,
       to: message.to,
       bcc: message.bcc,
       subject: message.subject,
       text: message.text,
       html: message.html
-    });
-    return { sent: true, messageId: result.messageId };
-  } catch (error) {
-    console.error("SMTP SEND ERROR:", error);
-    throw error;
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = result.message || result.name || JSON.stringify(result);
+    throw new Error('Resend API ' + response.status + ': ' + detail);
   }
+  return { sent: true, messageId: result.id || null };
 };
 
 /* --------------------------------------------------------------- plumbing */
@@ -770,8 +770,8 @@ const mailCustomer = async (order, req) => {
   const mail = buildCustomerEmail(order, req);
   try {
     if (!MAIL_ENABLED) {
-      console.warn('[mail] Gmail SMTP is not configured; confirmation not sent:', JSON.stringify({ to: order.email, orderId: order.id, trackingId: order.trackingId, items: order.items }));
-      return { emailSent: false, reason: 'smtp-not-configured', trackUrl: mail.trackUrl };
+      console.warn('[mail] RESEND_API_KEY is not configured; confirmation not sent:', JSON.stringify({ to: order.email, orderId: order.id, trackingId: order.trackingId, items: order.items }));
+      return { emailSent: false, reason: 'resend-not-configured', trackUrl: mail.trackUrl };
     }
     const result = await sendMail({
       to: order.email,
@@ -782,7 +782,7 @@ const mailCustomer = async (order, req) => {
     });
     return { emailSent: result.sent, trackUrl: mail.trackUrl };
   } catch (error) {
-    console.error('[mail] customer email failed for ' + order.id + ':', error.message);
+    console.error('[mail] Resend confirmation failed for ' + order.id + ':', error);
     return { emailSent: false, mailError: error.message, trackUrl: mail.trackUrl };
   }
 };
@@ -802,8 +802,8 @@ const mailTrackingUpdate = async (order, req) => {
   ].join('\n');
   try {
     if (!MAIL_ENABLED) {
-      console.warn('[mail] Gmail SMTP is not configured; tracking update not sent:', JSON.stringify({ to: order.email, subject, orderId: order.id, trackingId: order.trackingId, status: order.status, trackUrl }));
-      return { emailSent: false, reason: 'smtp-not-configured' };
+      console.warn('[mail] RESEND_API_KEY is not configured; tracking update not sent:', JSON.stringify({ to: order.email, subject, orderId: order.id, trackingId: order.trackingId, status: order.status, trackUrl }));
+      return { emailSent: false, reason: 'resend-not-configured' };
     }
     await sendMail({ to: order.email, subject, text, html: '<p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p>' });
     return { emailSent: true };
@@ -1424,9 +1424,9 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log('Solids storefront at http://localhost:' + PORT);
   if (MAIL_ENABLED) {
-    console.log('  emails: on (Gmail SMTP, sending as SOLID Store <solids.pk.official@gmail.com>)');
+    console.log('  emails: on (Resend HTTPS API, sending as ' + RESEND_FROM + ')');
   } else {
-    console.log('  emails: OFF - set GMAIL_USER and GMAIL_APP_PASS in .env to send tracking links.');
+    console.log('  emails: OFF - set RESEND_API_KEY in .env to send tracking links.');
   }
   if (WHATSAPP_ACCESS_TOKEN && WHATSAPP_PHONE_NUMBER_ID && WHATSAPP_TEMPLATE_NAME) console.log('  WhatsApp order alerts: configured');
   else console.log('  WhatsApp order alerts: OFF - configure WhatsApp Cloud API credentials and approved template');
