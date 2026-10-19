@@ -1287,9 +1287,14 @@
         .then(function (data) {
           api.productsOnline = true;
           api.productsConfigured = !!data.configured;
-          if (Array.isArray(data.products)) {
+          /* An empty server catalogue can happen before production data has
+             been seeded. Do not replace the usable browser/default catalogue
+             with an empty array, which leaves product.html on its placeholders. */
+          if (Array.isArray(data.products) && data.products.length) {
             state.products = data.products.map(normalizeProduct);
             global.dispatchEvent(new CustomEvent('store:products-loaded'));
+          } else if (!state.products.length) {
+            state.products = DEFAULT_PRODUCTS.map(normalizeProduct);
           }
           return { online: true, configured: api.productsConfigured };
         })
