@@ -684,7 +684,7 @@
         if (result && result.order) {
           local.id = result.order.id;
           local.trackingId = result.order.trackingId;
-          local.sent = !!result.emailSent;
+          local.sent = !!result.emailQueued;
           local.trackUrl = result.trackUrl || '';
         }
         finishOrder(local);
@@ -857,22 +857,19 @@
     const modal = document.createElement('div');
     modal.className = 'store-modal show';
     modal.id = 'confirmation-modal';
-    /* The server told us whether it actually managed to send mail. Promising an
-       email that never arrived is what broke this screen before, so the wording
-       branches on the real answer: either the link is in their inbox, or it is
-       not and they need to send it themselves. */
+    /* Email runs in the background after the saved order is acknowledged. */
     const mailed = !!order.sent;
 
     const deliveryBlock = mailed ? `
-        <p class="confirm-track-note">We have emailed your tracking link to <strong>${escapeHtml(order.email)}</strong>. Open it on any device and paste your tracking ID to follow the parcel.</p>
+        <p class="confirm-track-note">Your confirmation and tracking link are being sent to <strong>${escapeHtml(order.email)}</strong>. Your order is already saved; you can also use the tracking link below now.</p>
         <div class="confirm-actions">
           <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order &#8599;</a>
           <a class="button" href="track.html?id=${encodeURIComponent(order.trackingId)}">Open tracking page</a>
         </div>` : `
-        <p class="confirm-track-note">The studio has not received this order yet, and this page cannot email it. Use the button below to send it — it opens your email app with everything filled in. <strong>Save your tracking link below</strong> so you can follow the parcel from any device.</p>
+        <p class="confirm-track-note">Your order is saved. Automatic email is currently unavailable, so use the tracking link below to follow your parcel and keep your Order ID and Tracking ID for reference.</p>
         <div class="confirm-actions">
           <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order &#8599;</a>
-          <a class="button confirm-send" href="${escapeAttr(mailtoHref)}">Send order to ${escapeHtml(config.supportEmail)} &#8599;</a>
+          <button type="button" class="button" data-copy-link>Copy tracking link</button>
         </div>`;
 
     modal.innerHTML = `
@@ -1493,17 +1490,25 @@
       const relatedHost = document.querySelector('#related-products');
       const relatedGrid = document.querySelector('#related-grid');
       if (relatedHost && relatedGrid) {
-        const pool = Store.state.products
-          .map((item, position) => ({ item, position }))
-          .filter(entry => entry.position !== index)
-          .sort((a, b) => {
-            const scoreA = (a.item.category === product.category ? 2 : 0) + (a.item.tag === product.tag ? 1 : 0);
-            const scoreB = (b.item.category === product.category ? 2 : 0) + (b.item.tag === product.tag ? 1 : 0);
-            return scoreB - scoreA;
-          })
-          .slice(0, 4);
+        const renderRelatedProducts = products => {
+          const currentId = product.id == null ? '' : String(product.id);
+          const pool = products
+            .map((item, position) => ({ item, position }))
+            .filter(entry => entry.position !== index &&
+              (!currentId || String(entry.item.id == null ? '' : entry.item.id) !== currentId) &&
+              entry.item.active !== false && entry.item.isActive !== false)
+            .sort((a, b) => {
+              const scoreA = (a.item.category === product.category ? 2 : 0) + (a.item.tag === product.tag ? 1 : 0);
+              const scoreB = (b.item.category === product.category ? 2 : 0) + (b.item.tag === product.tag ? 1 : 0);
+              return scoreB - scoreA;
+            })
+            .slice(0, 4);
 
-        if (pool.length) {
+          if (!pool.length) {
+            relatedHost.hidden = true;
+            return;
+          }
+          relatedHost.hidden = false;
           relatedGrid.innerHTML = pool.map(({ item, position }) => {
             const status = Store.productStatus(item);
             const units = Store.totalStock(item);
@@ -1533,9 +1538,14 @@
           relatedGrid.querySelectorAll('.quick-add').forEach(button => button.addEventListener('click', () => {
             window.location.href = `product.html?product=${Number(button.dataset.product)}`;
           }));
-        } else {
-          relatedHost.hidden = true;
-        }
+        };
+
+        /* Prefer the latest active catalogue from the backend. If the API is
+           unavailable, use the already-loaded storefront catalogue. */
+        fetch('/api/products')
+          .then(response => response.ok ? response.json() : Promise.reject(new Error('Product API unavailable')))
+          .then(data => renderRelatedProducts(Array.isArray(data.products) ? data.products : Store.state.products))
+          .catch(() => renderRelatedProducts(Store.state.products));
       }
 
       update();

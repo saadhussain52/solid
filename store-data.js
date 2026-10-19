@@ -1399,7 +1399,10 @@
         })
         .then(function (data) {
           api.online = true;
-          return api.loadProducts().then(function () { return data; });
+          /* Refresh inventory without making checkout wait on a second API
+             request after the order itself has already been accepted. */
+          api.loadProducts().catch(function () {});
+          return data;
         });
     },
 

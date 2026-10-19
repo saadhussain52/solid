@@ -13,16 +13,17 @@
  *   node server.js            -> http://localhost:5173
  *   PORT=3000 node server.js   -> http://localhost:3000
  *
- * Email is optional. Without RESEND_API_KEY the site still works and orders are
+ * Email is optional. Without Gmail SMTP credentials the site still works and orders are
  * still saved; the confirmation screen falls back to opening the customer's
  * mail app with the tracking link already filled in, exactly as before.
  *
- * No dependencies: plain Node.
+ * Nodemailer is used only for Gmail SMTP delivery.
  */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 const root = __dirname;
 
@@ -51,7 +52,9 @@ const PORT = Number(process.env.PORT) || 5173;
 /* Absolute base used inside tracking links. Set this in production, e.g.
    SITE_URL=https://yourdomain.com — otherwise the request host is used. */
 const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const GMAIL_USER = process.env.GMAIL_USER || '';
+const GMAIL_APP_PASS = process.env.GMAIL_APP_PASS || '';
+const MAIL_ENABLED = Boolean(GMAIL_USER && GMAIL_APP_PASS);
 const ADMIN_TEST_EMAIL = 'saadhussain3536@gmail.com';
 const OFFICIAL_EMAIL = process.env.OFFICIAL_EMAIL || 'solids.pk.official@gmail.com';
 const OFFICIAL_PHONE = process.env.OFFICIAL_PHONE || '+92 341 2782443';
@@ -621,30 +624,23 @@ const buildCustomerEmail = (order, req) => {
 
 const escapeAttr = value => escapeHtml(value).replace(/`/g, '&#96;');
 
-/* Sends via the Resend HTTP API. No SDK — one HTTPS POST is enough. Returns
-   { sent: false } when no key is configured so callers can fall back quietly. */
+/* Gmail app-password delivery. Credentials stay server-side and are optional
+   for local development; callers handle the unconfigured case gracefully. */
+const gmailTransport = MAIL_ENABLED ? nodemailer.createTransport({
+  service: 'gmail',
+  auth: { user: GMAIL_USER, pass: GMAIL_APP_PASS }
+}) : null;
 const sendMail = async message => {
-  if (!RESEND_API_KEY) return { sent: false, reason: 'no-key' };
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + RESEND_API_KEY,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: 'SOLID Store <onboarding@resend.dev>',
-      reply_to: MAIL_REPLY_TO,
-      to: message.to,
-      subject: message.subject,
-      text: message.text,
-      html: message.html
-    })
+  if (!gmailTransport) return { sent: false, reason: 'smtp-not-configured' };
+  const result = await gmailTransport.sendMail({
+    from: 'SOLID Store <solids.pk.official@gmail.com>',
+    replyTo: MAIL_REPLY_TO,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html
   });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error('Resend ' + response.status + ': ' + detail.slice(0, 200));
-  }
-  return { sent: true, data: await response.json() };
+  return { sent: true, messageId: result.messageId };
 };
 
 /* --------------------------------------------------------------- plumbing */
@@ -766,9 +762,9 @@ const readBinary = (req, limit = 6000000) => new Promise((resolve, reject) => {
 const mailCustomer = async (order, req) => {
   const mail = buildCustomerEmail(order, req);
   try {
-    if (!RESEND_API_KEY) {
-      console.warn('[mail] confirmation dispatch payload (RESEND_API_KEY missing):', JSON.stringify({ to: order.email, subject: 'Your Solids order ' + order.id + ' — tracking details', orderId: order.id, trackingId: order.trackingId, items: order.items, instructions: "Use the website footer's Track Your Order link and enter the Tracking ID." }));
-      return { emailSent: false, reason: 'no-key', trackUrl: mail.trackUrl };
+    if (!MAIL_ENABLED) {
+      console.warn('[mail] Gmail SMTP is not configured; confirmation not sent:', JSON.stringify({ to: order.email, orderId: order.id, trackingId: order.trackingId, items: order.items }));
+      return { emailSent: false, reason: 'smtp-not-configured', trackUrl: mail.trackUrl };
     }
     const result = await sendMail({
       to: order.email,
@@ -797,9 +793,9 @@ const mailTrackingUpdate = async (order, req) => {
     'Track online: ' + trackUrl
   ].join('\n');
   try {
-    if (!RESEND_API_KEY) {
-      console.warn('[mail] tracking update dispatch payload (RESEND_API_KEY missing):', JSON.stringify({ to: order.email, subject, orderId: order.id, trackingId: order.trackingId, status: order.status, trackUrl }));
-      return { emailSent: false, reason: 'no-key' };
+    if (!MAIL_ENABLED) {
+      console.warn('[mail] Gmail SMTP is not configured; tracking update not sent:', JSON.stringify({ to: order.email, subject, orderId: order.id, trackingId: order.trackingId, status: order.status, trackUrl }));
+      return { emailSent: false, reason: 'smtp-not-configured' };
     }
     await sendMail({ to: order.email, subject, text, html: '<p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p>' });
     return { emailSent: true };
@@ -815,9 +811,9 @@ const mailStudio = async (order, req) => {
   if (String(order.email || '').trim().toLowerCase() === ADMIN_TEST_EMAIL) return { emailSent: false, reason: 'customer-is-admin' };
   const mail = buildCustomerEmail(order, req);
   try {
-    if (!RESEND_API_KEY) {
-      console.warn('[mail] admin confirmation copy dispatch payload (RESEND_API_KEY missing):', JSON.stringify({ to: ADMIN_TEST_EMAIL, orderId: order.id, trackingId: order.trackingId, items: order.items }));
-      return { emailSent: false, reason: 'no-key' };
+    if (!MAIL_ENABLED) {
+      console.warn('[mail] Gmail SMTP is not configured; admin confirmation copy not sent:', JSON.stringify({ to: ADMIN_TEST_EMAIL, orderId: order.id, trackingId: order.trackingId, items: order.items }));
+      return { emailSent: false, reason: 'smtp-not-configured' };
     }
     await sendMail({
       to: ADMIN_TEST_EMAIL,
@@ -1012,23 +1008,22 @@ const handleCreate = async (req, res) => {
     console.error('[products] stock update failed for ' + order.id + ':', error.message);
   }
 
-  /* Saved first, emailed second — a mail outage must never lose the order. */
-  const mail = await mailCustomer(order, req);
-  await mailStudio(order, req);
-  try {
-    await whatsappCustomer(order);
-  } catch (error) {
-    console.error('[whatsapp] customer notification failed for ' + order.id + ':', error.message);
-  }
-
-  return json(res, 201, {
+  /* Respond as soon as the saved order is ready. SMTP and WhatsApp run after
+     the response so network delays never hold the checkout confirmation open. */
+  const trackUrl = siteUrl('/track.html?id=' + encodeURIComponent(order.trackingId), req);
+  const response = json(res, 200, {
     ok: true,
     order: publicOrder(order),
-    emailSent: mail.emailSent,
-    mailError: mail.mailError || null,
+    emailQueued: MAIL_ENABLED,
     whatsappDispatchConfigured: Boolean(WHATSAPP_ACCESS_TOKEN && WHATSAPP_PHONE_NUMBER_ID && WHATSAPP_TEMPLATE_NAME),
-    trackUrl: mail.trackUrl
+    trackUrl
   });
+  setImmediate(() => {
+    mailCustomer(order, req).catch(error => console.error('[mail] customer dispatch failed for ' + order.id + ':', error.message));
+    mailStudio(order, req).catch(error => console.error('[mail] admin copy dispatch failed for ' + order.id + ':', error.message));
+    whatsappCustomer(order).catch(error => console.error('[whatsapp] customer notification failed for ' + order.id + ':', error.message));
+  });
+  return response;
 };
 
 /* GET /api/orders/:ref — the tracking page. Accepts the tracking ID, the order
@@ -1158,7 +1153,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         orders: loadOrders().length,
         dataWritable: writable,
-        mail: RESEND_API_KEY ? 'on' : 'off'
+        mail: MAIL_ENABLED ? 'on' : 'off'
       });
     }
 
@@ -1440,10 +1435,10 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log('Solids storefront at http://localhost:' + PORT);
-  if (RESEND_API_KEY) {
-    console.log('  emails: on (Resend, sending as SOLID Store <onboarding@resend.dev>)');
+  if (MAIL_ENABLED) {
+    console.log('  emails: on (Gmail SMTP, sending as SOLID Store <solids.pk.official@gmail.com>)');
   } else {
-    console.log('  emails: OFF - set RESEND_API_KEY in .env to send tracking links.');
+    console.log('  emails: OFF - set GMAIL_USER and GMAIL_APP_PASS in .env to send tracking links.');
   }
   if (WHATSAPP_ACCESS_TOKEN && WHATSAPP_PHONE_NUMBER_ID && WHATSAPP_TEMPLATE_NAME) console.log('  WhatsApp order alerts: configured');
   else console.log('  WhatsApp order alerts: OFF - configure WhatsApp Cloud API credentials and approved template');
