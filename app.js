@@ -1345,10 +1345,11 @@
       if (relatedHost && relatedGrid) {
         const renderRelatedProducts = products => {
           const currentId = product.id == null ? '' : String(product.id);
-          const pool = products
+          const findPool = source => source
             .map((item, position) => ({ item, position }))
-            .filter(entry => entry.position !== index &&
-              (!currentId || String(entry.item.id == null ? '' : entry.item.id) !== currentId) &&
+            .filter(entry => (currentId
+                ? String(entry.item.id == null ? '' : entry.item.id) !== currentId
+                : entry.position !== index) &&
               entry.item.active !== false && entry.item.isActive !== false)
             .sort((a, b) => {
               const scoreA = (a.item.category === product.category ? 2 : 0) + (a.item.tag === product.tag ? 1 : 0);
@@ -1356,6 +1357,14 @@
               return scoreB - scoreA;
             })
             .slice(0, 4);
+          let pool = findPool(products);
+
+          /* Some hosted API responses are temporarily empty while the shared
+             storefront catalogue already has products loaded. Keep the
+             recommendation section populated from that catalogue in that case. */
+          if (!pool.length && products !== Store.state.products) {
+            pool = findPool(Store.state.products);
+          }
 
           if (!pool.length) {
             relatedHost.hidden = true;
@@ -1397,7 +1406,7 @@
            unavailable, use the already-loaded storefront catalogue. */
         fetch('/api/products')
           .then(response => response.ok ? response.json() : Promise.reject(new Error('Product API unavailable')))
-          .then(data => renderRelatedProducts(Array.isArray(data.products) ? data.products : Store.state.products))
+          .then(data => renderRelatedProducts(Array.isArray(data.products) && data.products.length ? data.products : Store.state.products))
           .catch(() => renderRelatedProducts(Store.state.products));
       }
 
