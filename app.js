@@ -621,6 +621,8 @@
      the server's copy simply overwrites the reference fields when it answers. */
   function submitCheckout(modal, event) {
     event.preventDefault();
+    const submit = modal.querySelector('#co-submit');
+    if (submit && submit.disabled) return;
     const { lines, city, quote } = quoteForCheckout(modal);
     if (!lines.length) { notify('Your bag is empty'); return; }
     const missingColor = lines.find(entry => !entry.line.color);
@@ -660,7 +662,6 @@
       items
     });
 
-    const submit = modal.querySelector('#co-submit');
     if (submit) { submit.disabled = true; submit.textContent = 'Placing your order…'; }
 
     /* Never let a network failure cost the customer their order: the local copy
@@ -698,7 +699,7 @@
     updateCart();
     closeDrawers();
     const modal = document.querySelector('#checkout-modal');
-    if (modal) modal.classList.remove('show');
+    if (modal) modal.remove();
     renderProducts(currentFilter);
     showOrderConfirmation(order);
   }

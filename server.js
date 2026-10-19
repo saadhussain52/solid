@@ -55,7 +55,6 @@ const SITE_URL = String(process.env.SITE_URL || '').replace(/\/+$/, '');
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASS = process.env.GMAIL_APP_PASS || '';
 const MAIL_ENABLED = Boolean(GMAIL_USER && GMAIL_APP_PASS);
-const ADMIN_TEST_EMAIL = 'saadhussain3536@gmail.com';
 const OFFICIAL_EMAIL = process.env.OFFICIAL_EMAIL || 'solids.pk.official@gmail.com';
 const OFFICIAL_PHONE = process.env.OFFICIAL_PHONE || '+92 341 2782443';
 const MAIL_REPLY_TO = process.env.MAIL_REPLY_TO || OFFICIAL_EMAIL;
@@ -627,7 +626,9 @@ const escapeAttr = value => escapeHtml(value).replace(/`/g, '&#96;');
 /* Gmail app-password delivery. Credentials stay server-side and are optional
    for local development; callers handle the unconfigured case gracefully. */
 const gmailTransport = MAIL_ENABLED ? nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: { user: GMAIL_USER, pass: GMAIL_APP_PASS }
 }) : null;
 const sendMail = async message => {
@@ -636,6 +637,7 @@ const sendMail = async message => {
     from: 'SOLID Store <solids.pk.official@gmail.com>',
     replyTo: MAIL_REPLY_TO,
     to: message.to,
+    bcc: message.bcc,
     subject: message.subject,
     text: message.text,
     html: message.html
@@ -768,6 +770,9 @@ const mailCustomer = async (order, req) => {
     }
     const result = await sendMail({
       to: order.email,
+      bcc: String(order.email || '').trim().toLowerCase() === OFFICIAL_EMAIL.trim().toLowerCase()
+        ? undefined
+        : OFFICIAL_EMAIL,
       subject: 'Your Solids order ' + order.id + ' — tracking details',
       text: mail.lines,
       html: mail.html
@@ -801,29 +806,6 @@ const mailTrackingUpdate = async (order, req) => {
     return { emailSent: true };
   } catch (error) {
     console.error('[mail] tracking update failed for ' + order.id + ':', error.message);
-    return { emailSent: false, reason: error.message };
-  }
-};
-
-/* During testing, send the customer confirmation to the admin inbox as well.
-   Skip it when the customer already used that address to avoid a duplicate. */
-const mailStudio = async (order, req) => {
-  if (String(order.email || '').trim().toLowerCase() === ADMIN_TEST_EMAIL) return { emailSent: false, reason: 'customer-is-admin' };
-  const mail = buildCustomerEmail(order, req);
-  try {
-    if (!MAIL_ENABLED) {
-      console.warn('[mail] Gmail SMTP is not configured; admin confirmation copy not sent:', JSON.stringify({ to: ADMIN_TEST_EMAIL, orderId: order.id, trackingId: order.trackingId, items: order.items }));
-      return { emailSent: false, reason: 'smtp-not-configured' };
-    }
-    await sendMail({
-      to: ADMIN_TEST_EMAIL,
-      subject: 'Customer confirmation copy — order ' + order.id + ' · tracking ' + order.trackingId,
-      text: mail.lines,
-      html: mail.html
-    });
-    return { emailSent: true };
-  } catch (error) {
-    console.error('[mail] admin confirmation copy failed for ' + order.id + ':', error.message);
     return { emailSent: false, reason: error.message };
   }
 };
@@ -1019,9 +1001,12 @@ const handleCreate = async (req, res) => {
     trackUrl
   });
   setImmediate(() => {
-    mailCustomer(order, req).catch(error => console.error('[mail] customer dispatch failed for ' + order.id + ':', error.message));
-    mailStudio(order, req).catch(error => console.error('[mail] admin copy dispatch failed for ' + order.id + ':', error.message));
-    whatsappCustomer(order).catch(error => console.error('[whatsapp] customer notification failed for ' + order.id + ':', error.message));
+    Promise.resolve()
+      .then(() => mailCustomer(order, req))
+      .catch(error => console.error('[mail] customer dispatch failed for ' + order.id + ':', error.message));
+    Promise.resolve()
+      .then(() => whatsappCustomer(order))
+      .catch(error => console.error('[whatsapp] customer notification failed for ' + order.id + ':', error.message));
   });
   return response;
 };
