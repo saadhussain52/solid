@@ -16,13 +16,36 @@
   let cart = [];
   let wishlist = new Set();
   try { cart = JSON.parse(localStorage.getItem('solids-cart') || '[]') || []; } catch (error) { cart = []; }
+  try { wishlist = new Set((JSON.parse(localStorage.getItem('solids-wishlist') || '[]') || []).map(Number)); } catch (error) { wishlist = new Set(); }
 
   const saveCart = () => {
     try { localStorage.setItem('solids-cart', JSON.stringify(cart)); } catch (error) { /* ignore */ }
   };
 
   const productLabel = product => Store.categoryName(product.category);
+  const syncWishlistButton = (button, index) => {
+    const saved = wishlist.has(Number(index));
+    button.classList.toggle('is-saved', saved);
+    button.setAttribute('aria-label', saved ? 'Remove from wishlist' : 'Add to wishlist');
+    button.setAttribute('aria-pressed', String(saved));
+    button.title = saved ? 'Remove from wishlist' : 'Add to wishlist';
+    const label = button.querySelector('span');
+    if (label) label.textContent = saved ? 'Wishlisted' : 'Wishlist';
+  };
   const wishlistButton = index => `<button type="button" class="product-wishlist${wishlist.has(index) ? ' is-saved' : ''}" data-wishlist-product="${index}" aria-label="${wishlist.has(index) ? 'Remove from' : 'Add to'} wishlist" aria-pressed="${wishlist.has(index)}" title="${wishlist.has(index) ? 'Remove from' : 'Add to'} wishlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.6c0 5.4-8.8 11-8.8 11s-8.8-5.6-8.8-11A4.6 4.6 0 0 1 12 6a4.6 4.6 0 0 1 8.8 2.6Z"/></svg></button>`;
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-wishlist-product]');
+    if (!button) return;
+    const index = Number(button.dataset.wishlistProduct);
+    if (!Number.isInteger(index)) return;
+    if (wishlist.has(index)) wishlist.delete(index);
+    else wishlist.add(index);
+    try { localStorage.setItem('solids-wishlist', JSON.stringify(Array.from(wishlist))); } catch (error) { /* keep the in-page toggle usable */ }
+    document.querySelectorAll('[data-wishlist-product]').forEach(item => {
+      if (Number(item.dataset.wishlistProduct) === index) syncWishlistButton(item, index);
+    });
+  });
   window.addEventListener('store:products-loaded', () => renderProducts(currentFilter));
 
   /* ------------------------------------------------------- site content */
@@ -1264,16 +1287,11 @@
       const nameEl = document.querySelector('#detail-name');
       if (nameEl) {
         nameEl.textContent = product.name;
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'product-wishlist detail-wishlist';
-        button.dataset.wishlistProduct = String(index);
-        button.setAttribute('aria-label', wishlist.has(index) ? 'Remove from wishlist' : 'Add to wishlist');
-        button.setAttribute('aria-pressed', String(wishlist.has(index)));
-        button.title = wishlist.has(index) ? 'Remove from wishlist' : 'Add to wishlist';
-        button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.6c0 5.4-8.8 11-8.8 11s-8.8-5.6-8.8-11A4.6 4.6 0 0 1 12 6a4.6 4.6 0 0 1 8.8 2.6Z"/></svg>';
-        if (wishlist.has(index)) button.classList.add('is-saved');
-        nameEl.insertAdjacentElement('afterend', button);
+      }
+      const detailWishlist = document.querySelector('[data-detail-wishlist]');
+      if (detailWishlist) {
+        detailWishlist.dataset.wishlistProduct = String(index);
+        syncWishlistButton(detailWishlist, index);
       }
       const crumb = document.querySelector('#product-breadcrumb');
       if (crumb) crumb.textContent = product.name;
