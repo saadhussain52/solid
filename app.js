@@ -767,7 +767,10 @@
 
         ${instructions}
 
-        <p class="confirm-track-note">Aap ka parcel 3-4 working days mein receive ho jayega. Apne parcel ko track karne ke liye apni email check karein, wahan 'TRACK YOUR PARCEL' par click karke aap status dekh sakte hain.</p>
+        <div class="confirm-notice" role="note">
+          <p class="eyebrow">DELIVERY &amp; TRACKING</p>
+          <p>Aap ka parcel 3-4 working days mein receive ho jayega. Apne parcel ko track karne ke liye apni email check karein, wahan 'TRACK YOUR PARCEL' likha hua aayega, us par click karke aap dekh sakte hain ke aap ka parcel kahan hai.</p>
+        </div>
 
         <div class="modal-actions">
           <button type="button" class="button button-dark" data-confirm-close>Done</button>
