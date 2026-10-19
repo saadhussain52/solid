@@ -282,6 +282,15 @@
     }
   }
 
+  /* Product purchase actions use the same sign-in modal as the wishlist.
+     Return false to let the caller stop before changing the bag. */
+  window.StoreCustomer = window.StoreCustomer || {};
+  window.StoreCustomer.requireLogin = () => {
+    if (account) return true;
+    showAccount();
+    return false;
+  };
+
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-wishlist-product]');
     if (!button) return;
