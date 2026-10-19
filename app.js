@@ -769,7 +769,7 @@
 
         <div class="confirm-notice" role="note">
           <p class="eyebrow">DELIVERY &amp; TRACKING</p>
-          <p>Aap ka parcel 3-4 working days mein receive ho jayega. Apne parcel ko track karne ke liye apni email check karein, wahan 'TRACK YOUR PARCEL' likha hua aayega, us par click karke aap dekh sakte hain ke aap ka parcel kahan hai.</p>
+          <p>Your order will be delivered within 3-4 working days. To track your parcel, please check your email and click on 'TRACK YOUR PARCEL' to view live updates.</p>
         </div>
 
         <div class="modal-actions">
