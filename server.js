@@ -539,6 +539,65 @@ const escapeHtml = value => String(value == null ? '' : value)
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 /* ----------------------------------------------------------------- email */
 
+const itemOptionText = item => {
+  const display = value => {
+    if (value == null) return '';
+    if (typeof value === 'object') return String(value.label || value.value || value.name || '').trim();
+    return String(value).trim();
+  };
+  const optionSources = [
+    item.options, item.selectedOptions, item.fitOptions, item.variantOptions,
+    item.variant && item.variant.options,
+    item.selectedVariant && item.selectedVariant.options,
+    item.attributes, item.variation
+  ];
+  let candidateOptions = optionSources.find(value =>
+    (typeof value === 'string' && value.trim()) ||
+    (Array.isArray(value) && value.length) ||
+    (value && typeof value === 'object' && Object.keys(value).length)
+  );
+  if (typeof candidateOptions === 'string') {
+    try { candidateOptions = JSON.parse(candidateOptions); }
+    catch (error) { return candidateOptions.trim(); }
+  }
+  let optionPairs = [];
+  if (Array.isArray(candidateOptions)) {
+    optionPairs = candidateOptions.map(option => {
+      if (!option || typeof option !== 'object') return ['', display(option)];
+      return [
+        display(option.label || option.group || option.name || option.key),
+        display(option.value || option.selected || option.option)
+      ];
+    });
+  } else if (candidateOptions && typeof candidateOptions === 'object') {
+    if (candidateOptions.label || candidateOptions.group || candidateOptions.name || candidateOptions.key) {
+      optionPairs = [[
+        display(candidateOptions.label || candidateOptions.group || candidateOptions.name || candidateOptions.key),
+        display(candidateOptions.value || candidateOptions.selected || candidateOptions.option)
+      ]];
+    } else {
+      optionPairs = Object.entries(candidateOptions).map(([label, value]) => [display(label), display(value)]);
+    }
+  }
+  const optionSummary = optionPairs
+    .filter(([, value]) => value)
+    .map(([label, value]) => label ? label + ': ' + value : value)
+    .join(' · ');
+  if (optionSummary) return optionSummary;
+
+  const variant = item.variant && typeof item.variant === 'object' ? item.variant : {};
+  const selectedVariant = item.selectedVariant && typeof item.selectedVariant === 'object' ? item.selectedVariant : {};
+  const size = item.size || item.selectedSize || item.selected_size || item.sizeLabel || item.variantSize ||
+    variant.size || variant.label || selectedVariant.size || selectedVariant.label ||
+    (typeof item.variant === 'string' ? item.variant : '') ||
+    (typeof item.selectedVariant === 'string' ? item.selectedVariant : '');
+  const sizeText = display(size);
+  return sizeText ? 'Size: ' + sizeText : '';
+};
+
+const itemColourText = item => item.color || item.colour || item.selectedColor || item.selectedColour ||
+  (item.variant && (item.variant.color || item.variant.colour)) || '';
+
 /* Builds the message the customer receives. Both a plain-text and an HTML
    version are returned so the same content works in a mail client and in any
    inbox that would otherwise strip the HTML part. */
@@ -547,11 +606,12 @@ const buildCustomerEmail = (order, req) => {
   const total = Number(order.total) || 0;
   /* The whole point of the email: a link they can click from any device. */
   const trackUrl = siteUrl('/track.html?id=' + encodeURIComponent(order.trackingId), req);
-  const rows = (order.items || []).map(item =>
-    '  - ' + item.name + ' (' + (item.color || 'colour not recorded') +
-    (item.size ? ', size ' + item.size : ', size not recorded') + ')' +
-    ' x' + item.qty + ' — ' + money(Number(item.price) * Number(item.qty))
-  ).join('\n');
+  const rows = (order.items || []).map(item => {
+    const size = itemOptionText(item);
+    return '  - ' + item.name + ' (' + (itemColourText(item) || 'colour not recorded') +
+      (size ? ', ' + size : ', size not recorded') + ')' +
+      ' x' + item.qty + ' — ' + money(Number(item.price) * Number(item.qty));
+  }).join('\n');
   const charge = quote.waived ? 'Free' : money(quote.delivery || 0);
 
   const lines = [
@@ -584,13 +644,14 @@ const buildCustomerEmail = (order, req) => {
     '— Solids'
   ].join('\n');
 
-  const itemsHtml = (order.items || []).map(item =>
-    '<tr><td style="padding:6px 0;font-size:13px;color:#55504a">' +
-    escapeHtml(item.name) + ' · ' + escapeHtml(item.color || 'Colour not recorded') +
-    (item.size ? ' · size ' + escapeHtml(item.size) : ' · size not recorded') + ' × ' + escapeHtml(item.qty) +
-    '</td><td style="padding:6px 0;text-align:right;font-size:13px;color:#292827">' +
-    escapeHtml(money(Number(item.price) * Number(item.qty))) + '</td></tr>'
-  ).join('');
+  const itemsHtml = (order.items || []).map(item => {
+    const size = itemOptionText(item);
+    return '<tr><td style="padding:6px 0;font-size:13px;color:#55504a">' +
+      escapeHtml(item.name) + ' · ' + escapeHtml(itemColourText(item) || 'Colour not recorded') +
+      (size ? ' · ' + escapeHtml(size) : ' · size not recorded') + ' × ' + escapeHtml(item.qty) +
+      '</td><td style="padding:6px 0;text-align:right;font-size:13px;color:#292827">' +
+      escapeHtml(money(Number(item.price) * Number(item.qty))) + '</td></tr>';
+  }).join('');
 
   const html = [
     '<div style="font-family:Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#292827">',
