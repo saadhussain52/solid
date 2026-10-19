@@ -625,16 +625,16 @@ const escapeAttr = value => escapeHtml(value).replace(/`/g, '&#96;');
 
 /* Gmail app-password delivery. Credentials stay server-side and are optional
    for local development; callers handle the unconfigured case gracefully. */
-const gmailTransport = MAIL_ENABLED ? nodemailer.createTransport({
+const transporter = MAIL_ENABLED ? nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
   secure: true,
-  auth: { user: GMAIL_USER, pass: GMAIL_APP_PASS }
+  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASS }
 }) : null;
 const sendMail = async message => {
-  if (!gmailTransport) return { sent: false, reason: 'smtp-not-configured' };
+  if (!transporter) return { sent: false, reason: 'smtp-not-configured' };
   try {
-    const result = await gmailTransport.sendMail({
+    const result = await transporter.sendMail({
       from: '"SOLID Store" <solids.pk.official@gmail.com>',
       replyTo: MAIL_REPLY_TO,
       to: message.to,
@@ -645,16 +645,7 @@ const sendMail = async message => {
     });
     return { sent: true, messageId: result.messageId };
   } catch (error) {
-    console.error('[mail] Gmail SMTP sendMail failed:', {
-      to: message.to,
-      bcc: message.bcc,
-      message: error.message,
-      code: error.code || null,
-      command: error.command || null,
-      responseCode: error.responseCode || null,
-      response: error.response || null,
-      stack: error.stack || null
-    });
+    console.error("SMTP SEND ERROR:", error);
     throw error;
   }
 };
