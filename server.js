@@ -856,6 +856,7 @@ const mailAdminNewOrder = async (order, req) => {
   const total = Number(order.total) || 0;
   const shippingCharge = quote.waived ? 'Free' : money(quote.delivery || 0);
   const dashboardUrl = siteUrl('/orders.html', req);
+  const orderNumber = String(order.id || '').replace(/^#/, '');
   const itemRows = (order.items || []).map(item => {
     const values = [
       itemOptionText(item),
@@ -877,9 +878,10 @@ const mailAdminNewOrder = async (order, req) => {
   });
   const address = [order.address, order.city].filter(Boolean).join(', ');
   const payment = /bank|online|card|transfer/i.test(String(order.payment || '')) ? 'Online' : 'COD';
-  const subject = '🚨 New Order Alert - ' + order.id + ' (' + (order.customer || 'Customer') + ')';
+  const subject = '🚨 New Order Alert: #' + orderNumber + ' - ' + (order.customer || 'Customer');
   const text = [
-    'New order: ' + order.id,
+    'Order Number: ' + order.id,
+    'Tracking ID: ' + (order.trackingId || ''),
     'Customer: ' + (order.customer || ''),
     'Phone: ' + (order.phone || ''),
     'Shipping address: ' + (address || 'Not provided'),
@@ -900,10 +902,15 @@ const mailAdminNewOrder = async (order, req) => {
         '<h1 style="margin:0;font-size:22px">New Order Alert · ' + escapeHtml(order.id) + '</h1>',
       '</div>',
       '<div style="padding:22px 24px;border:1px solid #e8e5df">',
+        '<div style="padding:12px 14px;margin-bottom:20px;background:#f5f4f1">',
+          '<p style="margin:0 0 5px;font-size:13px"><strong>Order Number:</strong> ' + escapeHtml(order.id) + '</p>',
+          '<p style="margin:0;font-size:13px"><strong>Tracking ID:</strong> ' + escapeHtml(order.trackingId || '') + '</p>',
+        '</div>',
         '<h2 style="margin:0 0 12px;font-size:15px">Customer &amp; delivery</h2>',
         '<p style="margin:5px 0;font-size:13px"><strong>Name:</strong> ' + escapeHtml(order.customer || '') + '</p>',
         '<p style="margin:5px 0;font-size:13px"><strong>Phone:</strong> ' + escapeHtml(order.phone || '') + '</p>',
-        '<p style="margin:5px 0;font-size:13px"><strong>Shipping address:</strong> ' + escapeHtml(address || 'Not provided') + '</p>',
+        '<p style="margin:5px 0;font-size:13px"><strong>Shipping address:</strong> ' + escapeHtml(order.address || 'Not provided') + '</p>',
+        '<p style="margin:5px 0;font-size:13px"><strong>City:</strong> ' + escapeHtml(order.city || 'Not provided') + '</p>',
         '<h2 style="margin:24px 0 10px;font-size:15px">Order summary</h2>',
         '<table style="width:100%;border-collapse:collapse"><thead><tr>' +
           '<th style="padding:8px;text-align:left;background:#f5f4f1;font-size:11px">ITEM / OPTIONS</th>' +
