@@ -2220,7 +2220,7 @@
 
 .confirm-track {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   padding: 15px 16px;
   background: var(--ink);
@@ -2256,68 +2256,14 @@
   color: var(--muted)
 }
 
-/* Copy/save pair: this site cannot email a receipt, so the customer keeps
-   their own copy of the order number here. */
-.confirm-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 14px 0 0
-}
-
-.confirm-actions .button {
-  width: 100%
-}
-
-/* Shown only when the clipboard is blocked, so the text can be selected
-   and copied by hand. */
-.confirm-plain {
-  width: 100%;
-  margin: 12px 0 0;
-  padding: 12px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink);
-  font: inherit;
-  font-size: 11px;
-  line-height: 1.6;
-  resize: vertical
-}
-
-.confirm-send {
-  display: inline-block;
-  width: 100%;
-  margin-top: 13px
-}
-
-/* The tracking link is the one thing a customer must be able to save. Email
-   may not arrive, and they may open the site on another device, so the URL
-   itself is shown in full — selectable, wrapping across lines, never
-   truncated by a width limit. */
-.confirm-link {
-  margin-top: 20px;
-  padding: 15px 16px;
-  border: 1px solid var(--line);
-  background: #fbfaf7
-}
-
-.confirm-link-url {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  letter-spacing: 0;
-  color: var(--ink);
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  user-select: all;
-  -webkit-user-select: all
-}
-
 .confirm-items {
   margin-top: 18px;
   display: grid;
   gap: 8px
+}
+
+.confirm-items > .eyebrow {
+  margin: 0 0 2px
 }
 
 .confirm-items div {
@@ -2326,6 +2272,23 @@
   gap: 12px;
   font-size: 11.5px;
   letter-spacing: 0;
+  color: var(--muted)
+}
+
+.confirm-items div span {
+  display: grid;
+  gap: 4px
+}
+
+.confirm-items div strong {
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 500
+}
+
+.confirm-items div small {
+  font-size: 10.5px;
+  line-height: 1.5;
   color: var(--muted)
 }
 

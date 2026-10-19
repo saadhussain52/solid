@@ -727,175 +727,36 @@
             .filter(row => row[1])
             .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
         </dl>
-      </div>` : `
-      <div class="confirm-block">
-        <p class="eyebrow">CASH ON DELIVERY</p>
-        <p class="confirm-note">Keep <strong>${money(total)}</strong> ready for the courier. Please have the exact amount if you can — it saves everyone a second trip.</p>
-      </div>`;
-
-    /* A static page cannot send mail on its own, so the order reaches the studio
-       through the customer's own mail client — a pre-filled email to the
-       studio's address. The tracking ID is in the subject and the customer
-       keeps a copy, because the studio cannot mail them a confirmation. */
-    /* The one tracking link for this order. origin carries no trailing slash, so
-       it has to be added here or every link comes out as
-       localhost:5173track.html and 404s the moment the customer clicks it.
-       The server's copy wins when it answered, because that is the URL it
-       put in the email the customer actually received. */
-    const trackUrl = order.trackUrl
-      || window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'track.html?id=' + encodeURIComponent(order.trackingId);
-
-    const emailSubject = `New order ${order.id} — tracking ${order.trackingId}`;
-    const emailBody = [
-      `New order from ${config.supportEmail}`,
-      '',
-      `Order:       ${order.id}`,
-      `Tracking ID: ${order.trackingId}`,
-      `Customer:    ${order.customer}`,
-      `Phone:       ${order.phone}`,
-      `Email:       ${order.email}`,
-      `Address:     ${order.address}${order.city ? ', ' + order.city : ''}`,
-      `Notes:       ${order.notes || '—'}`,
-      `Payment:     ${payment}`,
-      '',
-      'Items:',
-      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.sku ? 'SKU ' + item.sku : '', item.color || 'Colour not recorded', optionSummary(item.options) || item.size || 'Size not recorded'].filter(Boolean).join(' / ')}) — ${money(item.price * item.qty)}`),
-      '',
-      `Subtotal: ${money(quote.subtotal || 0)}`,
-      `${chargeLabel}${order.city ? ' (' + order.city + ')' : ''}: ${chargeAmount}`,
-      `TOTAL: ${money(total)} PKR`,
-      '',
-      `Track: ${trackUrl}`
-    ].filter(Boolean).join('\n');
-    const mailtoHref = `mailto:${config.supportEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
-
-    /* A static page has no mail server, so nothing reaches the customer
-       unless they send it themselves. This block is the confirmation they
-       would have received, offered as plain text to copy — which is where
-       the order number actually reaches the customer. */
-    const orderNote = [
-      `Solids — order ${order.id}`,
-      `Tracking ID: ${order.trackingId}`,
-      `Placed: ${order.date}`,
-      `Payment: ${payment}`,
-      'Items:',
-      ...order.items.map(item => `  ${item.qty} × ${item.name} (${[item.sku ? 'SKU ' + item.sku : '', item.color || 'Colour not recorded', optionSummary(item.options) || item.size || 'Size not recorded'].filter(Boolean).join(' / ')}) — ${money(item.price * item.qty)}`),
-      `Total: ${money(total)} PKR`,
-      `Track: ${trackUrl}`
-    ].join('\n');
-
-    /* Save-to-file without a library: hands the customer a .txt they can
-       keep, standing in for the receipt this site cannot email. */
-    const saveOrderFile = () => {
-      const blob = new Blob([orderNote], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `solids-${order.id.replace('#', '')}-${order.trackingId}.txt`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      /* Revoked immediately it can cancel the download in some browsers, so
-         let the click land first. */
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      notify('Order details saved — keep the order number for tracking');
-    };
-
-    const copyOrderDetails = async () => {
-      try {
-        await navigator.clipboard.writeText(orderNote);
-        notify('Order details copied — order number included');
-      } catch (error) {
-        /* Clipboard needs a secure context or permission, so fall back to
-           selecting the text for the customer to copy by hand. */
-        const area = modal.querySelector('#confirm-plain');
-        if (!area) return;
-        area.hidden = false;
-        area.focus();
-        area.select();
-        notify('Press Ctrl/Cmd + C to copy your order number');
-      }
-    };
-
-    /* The tracking link is the one thing that must survive the screen closing,
-       so it is shown as a real, selectable URL with its own copy button rather
-       than hidden inside the "Track this order" button. Email may not arrive
-       (or the customer may open the site on another device), and this is what
-       they paste into a message or onto another device. */
-    const trackBlock = `
-      <div class="confirm-link">
-        <p class="eyebrow">YOUR TRACKING LINK</p>
-        <a class="confirm-link-url" href="${escapeAttr(trackUrl)}">${escapeHtml(trackUrl)}</a>
-        <div class="confirm-actions">
-          <button type="button" class="button" data-copy-link>Copy link</button>
-          <button type="button" class="button" data-copy-id>Copy tracking ID</button>
-        </div>
-        <p class="confirm-track-note">Open this link on any device to follow the parcel. You can also
-          <a href="track.html">search by your email address</a> on the tracking page — no link needed.</p>
-      </div>`;
-
-    const copyText = async (text, message) => {
-      try {
-        await navigator.clipboard.writeText(text);
-        notify(message);
-      } catch (error) {
-        /* Clipboard needs a secure context or permission. Fall back to a
-           temporary textarea so the customer is never left without a way to
-           get the link out. */
-        const area = document.createElement('textarea');
-        area.value = text;
-        area.setAttribute('readonly', '');
-        area.style.position = 'fixed';
-        area.style.opacity = '0';
-        document.body.appendChild(area);
-        area.select();
-        try { document.execCommand('copy'); notify(message); }
-        catch (err) { notify('Press Ctrl/Cmd + C to copy'); }
-        area.remove();
-      }
-    };
+      </div>` : '';
 
     const modal = document.createElement('div');
     modal.className = 'store-modal show';
     modal.id = 'confirmation-modal';
-    /* Email runs in the background after the saved order is acknowledged. */
-    const mailed = !!order.sent;
-
-    const deliveryBlock = mailed ? `
-        <p class="confirm-track-note">Your confirmation and tracking link are being sent to <strong>${escapeHtml(order.email)}</strong>. Your order is already saved; you can also use the tracking link below now.</p>
-        <div class="confirm-actions">
-          <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order &#8599;</a>
-          <a class="button" href="track.html?id=${encodeURIComponent(order.trackingId)}">Open tracking page</a>
-        </div>` : `
-        <p class="confirm-track-note">Your order is saved. Automatic email is currently unavailable, so use the tracking link below to follow your parcel and keep your Order ID and Tracking ID for reference.</p>
-        <div class="confirm-actions">
-          <a class="button button-dark" href="${escapeAttr(trackUrl)}">Track this order &#8599;</a>
-          <button type="button" class="button" data-copy-link>Copy tracking link</button>
-        </div>`;
+    const items = (order.items || []).map(item => {
+      const variant = optionSummary(item.options) || item.selectedSize || item.size || '';
+      const details = [item.color || item.colour, variant].filter(Boolean).map(escapeHtml).join(' · ');
+      return `<div><span><strong>${escapeHtml(item.qty)} × ${escapeHtml(item.name)}</strong>${details ? `<small>${details}</small>` : ''}</span><em>${money(item.price * item.qty)}</em></div>`;
+    }).join('');
+    const address = [order.address, order.city].filter(Boolean).map(escapeHtml).join(', ') || 'Not provided';
 
     modal.innerHTML = `
       <div class="store-modal-card confirm-card">
         <p class="eyebrow">ORDER CONFIRMED</p>
         <h3>Thank you, ${escapeHtml(order.customer)}</h3>
-        <p class="confirm-sub">Thank you — your order is saved. <strong>Your order number is ${escapeHtml(order.id)}</strong>${order.city ? `, and we are delivering to ${escapeHtml(order.city)}` : ''}.</p>
+        <p class="confirm-sub">Your order has been placed successfully.</p>
 
         <div class="confirm-track">
-          <div><span>Order</span><strong>${escapeHtml(order.id)}</strong></div>
-          <div><span>Tracking ID</span><strong>${escapeHtml(order.trackingId)}</strong></div>
+          <div><span>Order Number</span><strong>${escapeHtml(order.id)}</strong></div>
         </div>
 
-        ${deliveryBlock}
-
-        <div class="confirm-actions">
-          <button type="button" class="button" data-copy-order>Copy order details</button>
-          <button type="button" class="button" data-save-order>Save as file</button>
+        <div class="confirm-block">
+          <p class="eyebrow">SHIPPING ADDRESS</p>
+          <p class="confirm-note">${address}</p>
         </div>
-        <textarea id="confirm-plain" class="confirm-plain" readonly hidden aria-label="Your order details">${escapeHtml(orderNote)}</textarea>
-
-        ${trackBlock}
 
         <div class="confirm-items">
-          ${(order.items || []).map(item => `<div><span>${escapeHtml(item.name)} · ${item.sku ? 'SKU ' + escapeHtml(item.sku) + ' · ' : ''}${escapeHtml(item.color || 'Colour not recorded')} · ${escapeHtml(optionSummary(item.options) || item.size || 'Size not recorded')} × ${item.qty}</span><em>${money(item.price * item.qty)}</em></div>`).join('')}
+          <p class="eyebrow">ITEMS ORDERED</p>
+          ${items || '<p class="confirm-note">No item details available.</p>'}
         </div>
 
         <div class="co-charges">
@@ -906,8 +767,9 @@
 
         ${instructions}
 
+        <p class="confirm-track-note">Aap ka parcel 3-4 working days mein receive ho jayega. Apne parcel ko track karne ke liye apni email check karein, wahan 'TRACK YOUR PARCEL' par click karke aap status dekh sakte hain.</p>
+
         <div class="modal-actions">
-          <button type="button" class="button" data-track-order="${escapeAttr(order.trackingId)}">Track this order</button>
           <button type="button" class="button button-dark" data-confirm-close>Done</button>
         </div>
       </div>`;
@@ -915,19 +777,6 @@
 
     modal.addEventListener('click', event => {
       if (event.target === modal || event.target.closest('[data-confirm-close]')) modal.remove();
-      const track = event.target.closest('[data-track-order]');
-      if (track) { modal.remove(); window.location.href = 'track.html?id=' + encodeURIComponent(track.dataset.trackOrder); }
-      if (event.target.closest('[data-copy-order]')) copyOrderDetails();
-      if (event.target.closest('[data-save-order]')) saveOrderFile();
-      /* The tracking link and ID are the two things a customer needs to keep,
-         so both get a one-tap copy. copyText falls back to a hidden textarea
-         when the clipboard API is unavailable, so neither button can dead-end. */
-      if (event.target.closest('[data-copy-link]')) {
-        copyText(trackUrl, 'Tracking link copied — paste it anywhere');
-      }
-      if (event.target.closest('[data-copy-id]')) {
-        copyText(order.trackingId, 'Tracking ID copied');
-      }
     });
   }
 
