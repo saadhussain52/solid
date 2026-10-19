@@ -1349,8 +1349,7 @@
             .map((item, position) => ({ item, position }))
             .filter(entry => (currentId
                 ? String(entry.item.id == null ? '' : entry.item.id) !== currentId
-                : entry.position !== index) &&
-              entry.item.active !== false && entry.item.isActive !== false)
+                : entry.position !== index))
             .sort((a, b) => {
               const scoreA = (a.item.category === product.category ? 2 : 0) + (a.item.tag === product.tag ? 1 : 0);
               const scoreB = (b.item.category === product.category ? 2 : 0) + (b.item.tag === product.tag ? 1 : 0);
@@ -1402,12 +1401,10 @@
           }));
         };
 
-        /* Prefer the latest active catalogue from the backend. If the API is
-           unavailable, use the already-loaded storefront catalogue. */
-        fetch('/api/products')
-          .then(response => response.ok ? response.json() : Promise.reject(new Error('Product API unavailable')))
-          .then(data => renderRelatedProducts(Array.isArray(data.products) && data.products.length ? data.products : Store.state.products))
-          .catch(() => renderRelatedProducts(Store.state.products));
+        /* Product detail already waits for productsReady, so use that same
+           catalogue and its indices for recommendation links. Product records
+           do not have an active flag; filtering on one hid valid products. */
+        renderRelatedProducts(Store.state.products);
       }
 
       update();
