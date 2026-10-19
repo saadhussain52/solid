@@ -977,13 +977,13 @@
       const mediaLinks = document.createElement('div');
       mediaLinks.className = 'product-detail-links';
       const categoryLabel = String(Store.categoryName(product.category) || product.category || '').toLowerCase();
-      const productLabel = String(product.name || '').toLowerCase();
+      const productNameLabel = String(product.name || '').toLowerCase();
       const categoryIsSet = /(co[\s-]?ord|suit|pair)/.test(categoryLabel);
       const categoryIsShirt = /(shirt|top)/.test(categoryLabel);
       const categoryIsTrouser = /(trouser|pant|bottom)/.test(categoryLabel);
-      const productIsSet = /(co[\s-]?ord|suit|pair)/.test(productLabel);
-      const productIsShirt = /(shirt|top)/.test(productLabel);
-      const productIsTrouser = /(trouser|pant|bottom)/.test(productLabel);
+      const productIsSet = /(co[\s-]?ord|suit|pair)/.test(productNameLabel);
+      const productIsShirt = /(shirt|top)/.test(productNameLabel);
+      const productIsTrouser = /(trouser|pant|bottom)/.test(productNameLabel);
       /* A recognised category always wins. Product names only classify products
          assigned to general shelves such as New Arrivals. */
       const chartKinds = categoryIsSet ? ['shirt', 'trouser']
