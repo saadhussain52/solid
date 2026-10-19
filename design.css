@@ -478,6 +478,25 @@ body{
 
 .color-swatch:hover{transform:scale(1.06)}
 
+.color-swatch.is-out-of-stock{
+  opacity:.42;
+  filter:grayscale(.45);
+  cursor:not-allowed;
+  pointer-events:none
+}
+
+.color-swatch.is-out-of-stock::before{
+  content:"";
+  position:absolute;
+  left:3px;
+  right:3px;
+  top:50%;
+  height:2px;
+  background:rgba(35,35,35,.78);
+  transform:rotate(-45deg);
+  pointer-events:none
+}
+
 .color-swatch:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 /* A colour that carries its own product picture gets a small corner dot so the

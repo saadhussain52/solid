@@ -855,7 +855,22 @@
       }
       let galleryIndex = 0;
 
-      let sizes = Store.sizesFor(product, (product.colors || [])[0]);
+      const colorCandidates = (product.colors || [])
+        .concat(Object.keys(product.colorVariants || {}), Object.keys(product.fitInventory || {}), Object.keys(product.colorImages || {}))
+        .filter((color, position, list) => color && list.indexOf(color) === position);
+      const colorHasStock = color => {
+        if (product.fitOptionsEnabled && Array.isArray(product.fitVariants)) {
+          return product.fitVariants.some(variant => String(variant.color || '') === String(color) && Number(variant.stock) > 0);
+        }
+        if (product.fitOptionsEnabled && product.fitInventory && product.fitInventory[color]) {
+          const groups = product.fitOptionGroups || [];
+          return groups.length > 0 && groups.every(group =>
+            (product.fitInventory[color][group.label] || []).some(option => Number(option.stock) > 0));
+        }
+        return Store.sizesFor(product, color).some(size => Number(size.stock) > 0);
+      };
+      const defaultColor = colorCandidates.find(colorHasStock) || colorCandidates[0] || '';
+      let sizes = Store.sizesFor(product, defaultColor);
       const sizeRow = document.querySelector('.size-options');
       const renderSizeOptions = color => {
         sizes = Store.sizesFor(product, color);
@@ -869,7 +884,7 @@
         const firstAvailable = preferred || sizes.find(size => size.stock > 0) || sizes[0];
         if (firstAvailable) sizeRow.querySelector(`[data-size="${CSS.escape(firstAvailable.label)}"]`)?.classList.add('selected');
       };
-      renderSizeOptions((product.colors || [])[0] || Object.keys(product.colorVariants || {})[0] || '');
+      renderSizeOptions(defaultColor);
 
       const selectedSize = () => {
         const active = document.querySelector('.size-options button.selected');
@@ -878,7 +893,7 @@
       };
       const selectedColor = () => {
         const active = document.querySelector('#color-options .color-swatch.selected');
-        return active ? active.dataset.color : ((product.colors || [])[0] || Object.keys(product.colorVariants || {})[0] || '');
+        return active ? active.dataset.color : defaultColor;
       };
       const fitOptionGroups = product.fitOptionsEnabled && Array.isArray(product.fitOptionGroups) ? product.fitOptionGroups : [];
       const fitOptionsEnabled = product.fitOptionsEnabled && fitOptionGroups.length > 0;
@@ -1080,7 +1095,7 @@
       const colorHexes = product.colorHexes && typeof product.colorHexes === 'object' ? product.colorHexes : {};
       const savedColors = Array.isArray(product.colors) ? product.colors : [];
       const colors = savedColors
-        .concat(Object.keys(colorImages))
+        .concat(Object.keys(product.colorVariants || {}), Object.keys(product.fitInventory || {}), Object.keys(colorImages))
         .filter((name, position, list) => name && list.indexOf(name) === position);
       const colorRow = document.querySelector('#color-options');
       const colorLabel = document.querySelector('#selected-color');
@@ -1121,10 +1136,11 @@
           return (typeof custom === 'string' && custom) || standardColorHexes[String(name).trim().toLowerCase()] || '#a4a29e';
         };
         colorRow.innerHTML = colors.map((color, position) => {
+          const outOfStock = !colorHasStock(color);
           const hasPictures = picturesForColor(color).length > 0;
           const picture = picturesForColor(color)[0];
           const count = picturesForColor(color).length;
-          return `<button type="button" class="color-swatch${hasPictures ? ' has-image' : ''}${position === 0 ? ' selected' : ''}" data-color="${escapeAttr(color)}" title="${escapeAttr(color)}${hasPictures ? ' — ' + count + ' picture' + (count > 1 ? 's' : '') : ''}" aria-label="${escapeAttr(color)}" style="--swatch:${hexFor(color)}${picture ? `;--swatch-image:url('${escapeAttr(picture)}')` : ''}"></button>`;
+          return `<button type="button" class="color-swatch${hasPictures ? ' has-image' : ''}${outOfStock ? ' is-out-of-stock' : ''}${color === defaultColor ? ' selected' : ''}" data-color="${escapeAttr(color)}"${outOfStock ? ' disabled aria-disabled="true"' : ''} title="${escapeAttr(color)}${outOfStock ? ' — out of stock' : hasPictures ? ' — ' + count + ' picture' + (count > 1 ? 's' : '') : ''}" aria-label="${escapeAttr(color)}${outOfStock ? ' — out of stock' : ''}" style="--swatch:${hexFor(color)}${picture ? `;--swatch-image:url('${escapeAttr(picture)}')` : ''}"></button>`;
         }).join('');
       }
       const paintColors = () => {
@@ -1137,7 +1153,7 @@
       if (colorRow) {
         colorRow.addEventListener('click', event => {
           const button = event.target.closest('.color-swatch');
-          if (!button) return;
+          if (!button || button.disabled) return;
           colorRow.querySelectorAll('.color-swatch').forEach(item => item.classList.remove('selected'));
           button.classList.add('selected');
           paintColors();
@@ -1190,16 +1206,19 @@
             ? (!fitSelectionsComplete() ? 'Select all options' : (stock > 0 ? stock + ' in stock' : 'Out of stock'))
             : (stock > 0 ? label + ' · ' + stock + ' in stock' : label + ' · Out of stock');
         }
-        const canPurchase = fitOptionsEnabled
+        const allColorsOutOfStock = colors.length > 0 && !colors.some(colorHasStock);
+        const canPurchase = !allColorsOutOfStock && (fitOptionsEnabled
           ? Store.totalStock(product) > 0 && (!fitSelectionsComplete() || Boolean(fitVariant && fitVariant.stock > 0))
-          : stock > 0;
+          : stock > 0);
         document.querySelectorAll('.detail-add, .buy-now').forEach(button => {
           button.disabled = !canPurchase;
           button.classList.toggle('is-stock-unavailable', !canPurchase);
           button.setAttribute('aria-disabled', String(!canPurchase));
         });
         const addButton = document.querySelector('.detail-add');
-        if (addButton) addButton.innerHTML = badgeStock === 0 ? 'SOLD OUT' : 'ADD TO BAG <span>&#8599;</span>';
+        if (addButton) addButton.innerHTML = allColorsOutOfStock ? 'OUT OF STOCK' : badgeStock === 0 ? 'SOLD OUT' : 'ADD TO BAG <span>&#8599;</span>';
+        const buyButton = document.querySelector('.buy-now');
+        if (buyButton) buyButton.textContent = allColorsOutOfStock ? 'OUT OF STOCK' : 'Buy it now';
         sizeRow?.querySelectorAll('button').forEach(button => {
           button.classList.toggle('selected', button.dataset.size === label);
         });
